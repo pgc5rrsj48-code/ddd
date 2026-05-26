@@ -1,0 +1,1522 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>초등 영어 RPG 월드</title>
+
+  <!-- Firebase SDK (compat 버전 — CDN, import 없이 전역 사용) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Jua&display=swap');
+    body,html{margin:0;padding:0;width:100%;height:100%;background:#110d0a;display:flex;justify-content:center;align-items:center;font-family:'Jua',sans-serif;overflow:hidden;user-select:none;}
+    #game-container{width:1024px;height:576px;position:relative;border:8px solid #2c1a0e;border-radius:12px;overflow:hidden;background:#1a120b;}
+    .screen{width:100%;height:100%;position:absolute;top:0;left:0;display:none;flex-direction:column;justify-content:center;align-items:center;color:white;}
+
+    /* 배경 */
+    #auth-screen     {display:flex;background-image:url('bg_auth.png');background-size:cover;background-color:#2b1007;}
+    #town-screen     {background-image:url('bg_town.png');background-size:cover;background-color:#2c3e50;}
+    #training-screen {background-image:url('bg_training_gateway.png');background-size:cover;background-color:#34495e;}
+    #merchant-screen {background-color:#3e2723;}
+    #dungeon-select-screen{background-image:url('bg_dungeon.png');background-size:cover;background-position:center;padding:30px;box-sizing:border-box;justify-content:flex-start;align-items:center;}
+    #dungeon-battle-screen{background-image:url('bg_dungeon.png')!important;background-size:cover!important;background-position:center!important;}
+    #quiz-screen     {background-color:#2c3e50;}
+    #myroom-screen   {background:linear-gradient(135deg,#1a0e2e,#2d1b4e,#1a0e2e);}
+    #group-screen    {background:linear-gradient(135deg,#0a1628,#1a2d4e,#0a1628);}
+    #room-shop-screen{background:linear-gradient(135deg,#1a2e1a,#2d4e1b,#1a2e1a);}
+
+    /* HUD */
+    #points-ui{position:absolute;top:20px;left:20px;background:rgba(0,0,0,.85);border:3px solid #3498db;border-radius:8px;padding:8px 16px;z-index:200;display:none;color:#fff;font-size:18px;}
+    #xp-ui{position:absolute;top:58px;left:20px;background:rgba(0,0,0,.85);border:3px solid #9b59b6;border-radius:8px;padding:6px 14px;z-index:200;display:none;color:#fff;font-size:13px;min-width:170px;}
+    #xp-bar-outer{width:100%;height:8px;background:#333;border-radius:4px;margin-top:4px;}
+    #xp-bar-inner{height:8px;background:linear-gradient(to right,#9b59b6,#e91e63);border-radius:4px;transition:width .5s;}
+    #group-badge{position:absolute;top:100px;left:20px;background:rgba(0,0,0,.85);border:3px solid #3498db;border-radius:8px;padding:4px 12px;z-index:200;display:none;color:#3498db;font-size:13px;}
+
+    /* 인벤토리 */
+    #inventory-ui{position:absolute;top:20px;right:20px;width:150px;background:rgba(16,12,8,.95);border:4px solid #f1c40f;padding:12px;z-index:200;display:none;color:white;box-sizing:border-box;}
+    .inv-title{font-size:15px;border-bottom:4px double #5c3a21;margin-bottom:8px;padding-bottom:5px;color:#f1c40f;text-align:center;}
+    .inv-list{font-size:13px;list-style:none;padding:0;margin:0;max-height:100px;overflow-y:auto;}
+    .inv-list li{margin-bottom:4px;color:#eebb88;text-align:center;}
+
+    /* 배너 */
+    .banner{position:absolute;top:20px;left:50%;transform:translateX(-50%);background:linear-gradient(to bottom,#4a2e1b,#2c1a0e);border:4px solid #f1c40f;padding:10px 35px;font-size:22px;z-index:10;color:#f1c40f;white-space:nowrap;box-shadow:inset -4px -4px 0 #1a0f08,inset 4px 4px 0 #7d5233;text-shadow:2px 2px 0 #000;}
+
+    /* 버튼 */
+    .back-btn{position:absolute;bottom:20px;left:20px;padding:10px 20px;background:linear-gradient(to bottom,#c0392b,#962d22);border:4px solid #1a0f08;color:white;font-family:'Jua',sans-serif;font-size:16px;cursor:pointer;z-index:1000;box-shadow:inset -4px -4px 0 #5c1d16,inset 4px 4px 0 #e74c3c,0 4px 0 #000;text-shadow:2px 2px 0 #000;transition:transform .1s;}
+    .back-btn:active{transform:translateY(4px);}
+    .logout-btn{position:absolute;top:20px;right:20px;padding:8px 16px;background:linear-gradient(to bottom,#e74c3c,#c0392b);color:white;border:4px solid #1a0f08;cursor:pointer;font-family:'Jua',sans-serif;font-size:14px;z-index:100;}
+    .flee-btn{position:absolute;bottom:20px;left:20px;padding:10px 20px;background:linear-gradient(to bottom,#d35400,#a04000);border:4px solid #1a0f08;color:white;font-family:'Jua',sans-serif;font-size:16px;cursor:pointer;z-index:1000;}
+    .rpg-btn{background:linear-gradient(to bottom,#2980b9,#1a5276);color:white;border:3px solid #1a0f08;padding:10px 20px;font-family:'Jua',sans-serif;font-size:15px;cursor:pointer;margin:4px;}
+    .green-btn{background:linear-gradient(to bottom,#27ae60,#1e7e43);color:white;border:3px solid #1a0f08;padding:10px 20px;font-family:'Jua',sans-serif;font-size:15px;cursor:pointer;margin:4px;}
+
+    /* 로그인 */
+    .auth-title{font-size:52px;color:#f1c40f;text-shadow:4px 4px 0 #000,-2px -2px 0 #d35400;margin-bottom:24px;}
+    .auth-box{background:rgba(26,18,11,.95);border:5px solid #d35400;padding:30px;width:340px;text-align:center;color:#fff;box-shadow:inset -4px -4px 0 #7e3d00,inset 4px 4px 0 #f39c12;}
+    .auth-box h3{margin-top:0;font-size:24px;color:#f1c40f;margin-bottom:15px;}
+    .auth-box input{width:95%;padding:12px;margin-bottom:15px;background:#0c0805;border:4px solid #5c3a21;font-size:16px;font-family:'Jua',sans-serif;color:#fffbdf;box-sizing:border-box;}
+    .auth-box input:focus{border-color:#f1c40f;outline:none;}
+    .menu-tabs{display:flex;gap:8px;margin-bottom:18px;width:100%;justify-content:center;}
+    .tab-btn{padding:8px 22px;border:4px solid #1a0f08;cursor:pointer;font-family:'Jua',sans-serif;font-size:16px;background:#4a3321;color:#bdc3c7;}
+    .tab-btn.active{background:linear-gradient(to bottom,#e67e22,#d35400);color:white;}
+    .submit-btn{width:95%;padding:12px;background:linear-gradient(to bottom,#27ae60,#1e7e43);color:white;border:4px solid #1a0f08;font-size:20px;font-family:'Jua',sans-serif;cursor:pointer;}
+
+    /* 포탈 */
+    .portal{position:absolute;width:60px;height:80px;background:radial-gradient(circle at center,rgba(175,122,197,1) 0%,rgba(142,68,173,1) 40%,rgba(108,52,131,.6) 70%,transparent 100%);border-radius:50%;box-shadow:0 0 15px rgba(155,89,182,.8);display:flex;justify-content:center;align-items:center;cursor:pointer;z-index:5;animation:portalVortex 1.2s infinite alternate linear,portalPulse 2s infinite ease-in-out;}
+    .portal-label{position:absolute;top:-36px;background:#1a120b;padding:5px 12px;font-size:13px;border:3px solid #f1c40f;white-space:nowrap;color:#fffbdf;pointer-events:none;}
+    @keyframes portalVortex{0%{transform:scale(1) rotate(0deg);opacity:.9;}100%{transform:scale(1.05) rotate(3deg);opacity:1;}}
+    @keyframes portalPulse{0%,100%{box-shadow:0 0 15px rgba(155,89,182,.8);}50%{box-shadow:0 0 40px rgba(155,89,182,.9);}}
+
+    /* 포탈 위치 */
+    #portal-to-training{left:75px;top:440px;}
+    #portal-merchant   {left:265px;top:440px;}
+    #portal-dungeon    {left:455px;top:440px;}
+    #portal-myroom     {left:645px;top:440px;}
+    #portal-group      {left:835px;top:440px;}
+    #portal-word      {left:102px;top:440px;}
+    #portal-grammar   {left:356px;top:440px;}
+    #portal-writing   {left:608px;top:440px;}
+    #portal-listening {left:862px;top:440px;}
+
+    /* 플레이어 */
+    #player{position:absolute;width:50px;height:75px;z-index:99;display:none;flex-direction:column;align-items:center;top:450px;transition:transform .1s;image-rendering:pixelated;}
+    .character-avatar{width:44px;height:55px;position:relative;display:flex;flex-direction:column;align-items:center;}
+    .char-head{width:32px;height:28px;background:#ffdbac;border:4px solid #1a0f08;position:relative;z-index:3;box-shadow:inset 0 8px 0 #5c3a21;}
+    .char-head::after{content:'';position:absolute;top:10px;right:4px;width:6px;height:6px;background:#1a0f08;box-shadow:-12px 0 0 #1a0f08;}
+    .char-scarf{width:28px;height:6px;background:#e74c3c;border:4px solid #1a0f08;z-index:2;margin-top:-4px;}
+    .char-body {width:26px;height:18px;background:#3498db;border:4px solid #1a0f08;z-index:1;margin-top:-4px;}
+    .player-name-tag{background:#110d0a;color:#fff;padding:3px 12px;font-size:13px;margin-top:6px;white-space:nowrap;border:3px solid #f1c40f;}
+    .controls-guide{position:absolute;bottom:0;left:0;width:100%;background:rgba(16,12,8,.9);border-top:4px solid #f1c40f;padding:10px 0;font-size:14px;color:#fffbdf;text-align:center;z-index:2;}
+
+    /* 상점 */
+    #merchant-screen{background-color:#2b1a0e;flex-direction:row;justify-content:space-between;box-sizing:border-box;}
+    .merchant-left{width:35%;height:100%;display:flex;align-items:center;justify-content:center;border-right:6px double #5c3a21;background:rgba(0,0,0,.5);padding:25px;box-sizing:border-box;}
+    .merchant-left h2{font-size:26px;color:#f1c40f;text-shadow:3px 3px 0 #000;line-height:1.6;text-align:center;}
+    .merchant-right{width:65%;display:grid;grid-template-columns:repeat(2,1fr);gap:20px;padding:35px;align-content:center;box-sizing:border-box;overflow-y:auto;}
+    .shop-item-card{background:#4a3321;border:4px solid #1a0f08;padding:18px;text-align:center;color:white;}
+    .shop-item-card button{background:linear-gradient(to bottom,#27ae60,#1e7e43);color:white;border:4px solid #1a0f08;padding:8px 18px;font-family:'Jua',sans-serif;cursor:pointer;font-size:16px;margin-top:10px;}
+
+    /* 레벨 선택 */
+    .level-container{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;width:92%;margin-top:95px;max-height:400px;overflow-y:auto;padding-right:5px;}
+    .level-card{background:linear-gradient(to bottom,#3d2b1f,#251911);border:4px solid #1a0f08;height:90px;display:flex;flex-direction:column;justify-content:center;align-items:center;cursor:pointer;color:#fff;font-size:17px;box-sizing:border-box;text-shadow:2px 2px 0 #000;transition:all .1s;}
+    .level-card.locked{background:#333!important;opacity:.6;cursor:not-allowed;}
+    .level-card:not(.locked):hover{background:linear-gradient(to bottom,#d35400,#a04000);border-color:#f1c40f;transform:translateY(-4px);}
+    .level-card .status-text{font-size:12px;margin-top:5px;color:#f1c40f;}
+
+    /* 퀴즈 */
+    .quiz-box{background:#120c08;color:#fffbdf;padding:25px 40px;width:700px;height:410px;border:6px double #e5a93c;position:absolute;top:54%;left:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;justify-content:space-between;box-sizing:border-box;}
+    .quiz-progress{font-size:16px;color:#f1c40f;margin-bottom:5px;}
+    .quiz-question{font-size:22px;font-weight:bold;margin-bottom:18px;color:#fff;line-height:1.5;border-bottom:3px double #5c3a21;padding-bottom:10px;}
+    .quiz-options{display:flex;flex-direction:column;gap:10px;width:100%;}
+    .option-btn{padding:12px 24px;border:4px solid #1a0f08;font-family:'Jua',sans-serif;font-size:17px;cursor:pointer;background:linear-gradient(to bottom,#2c1f14,#1c130c);text-align:left;color:#ebb888;width:100%;box-sizing:border-box;}
+    .option-btn:hover{background:linear-gradient(to bottom,#422f1f,#2c1f14);color:#fff;border-color:#f1c40f;}
+    .scramble-container{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;min-height:50px;padding:10px;background:#0c0805;border:4px dashed #6d4c31;box-sizing:border-box;}
+    .word-block{background:linear-gradient(to bottom,#e67e22,#d35400);border:3px solid #1a0f08;padding:8px 16px;cursor:pointer;font-size:17px;}
+    .audio-btn{background:linear-gradient(to bottom,#9b59b6,#8e44ad);color:white;border:4px solid #1a0f08;padding:10px 28px;font-size:17px;cursor:pointer;margin:0 auto 12px auto;display:block;font-family:'Jua',sans-serif;}
+
+    /* 던전 */
+    .battle-arena{display:flex;justify-content:space-around;align-items:center;width:880px;height:240px;margin-top:65px;background:rgba(0,0,0,.4);border:4px double rgba(255,255,255,.1);padding:10px;box-sizing:border-box;}
+    .fighter{display:flex;flex-direction:column;align-items:center;gap:12px;width:200px;}
+    .hp-bar{font-size:30px;margin-bottom:6px;letter-spacing:2px;}
+    .battle-btn{padding:8px 16px;font-family:'Jua';font-size:16px;border-radius:6px;border:2px solid #fff;background:#2c3e50;color:white;cursor:pointer;min-width:120px;}
+    .battle-btn:hover{background:#34495e;border-color:#f1c40f;}
+    @keyframes playerAttack {0%{transform:translateX(0);}50%{transform:translateX(60px) scale(1.1);}100%{transform:translateX(0);}}
+    @keyframes monsterAttack{0%{transform:translateX(0);}50%{transform:translateX(-60px) scale(1.1);}100%{transform:translateX(0);}}
+    @keyframes hitDamage{0%,100%{transform:translateX(0);filter:brightness(1);}20%{transform:translateX(-10px);filter:brightness(2) sepia(1) hue-rotate(-50deg);}60%{transform:translateX(8px);}}
+    .animate-p-attack{animation:playerAttack .4s ease-in-out;}
+    .animate-m-attack{animation:monsterAttack .4s ease-in-out;}
+    .animate-hit     {animation:hitDamage .5s ease-in-out;}
+
+    /* 마이룸 */
+    .myroom-container{width:900px;height:440px;background:rgba(0,0,0,.6);border:6px double #9b59b6;border-radius:8px;display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(3,1fr);gap:10px;padding:18px;box-sizing:border-box;margin-top:80px;}
+    .room-slot{border:3px dashed #5c3a84;border-radius:8px;background:rgba(255,255,255,.03);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:36px;cursor:pointer;transition:background .2s;position:relative;}
+    .room-slot:hover{background:rgba(155,89,182,.2);}
+    .room-slot .slot-label{font-size:10px;color:#9b59b6;margin-top:3px;}
+    .room-slot.occupied{border-color:#9b59b6;background:rgba(155,89,182,.15);}
+    .remove-btn{position:absolute;top:2px;right:5px;font-size:12px;color:#e74c3c;cursor:pointer;display:none;}
+    .room-slot:hover .remove-btn{display:block;}
+
+    /* 그룹 */
+    .group-panel{background:rgba(0,0,0,.7);border:4px solid #3498db;padding:20px;border-radius:8px;}
+    .group-panel h3{color:#3498db;margin-top:0;font-size:20px;}
+    .group-input{background:#0c1825;border:3px solid #3498db;color:#fff;font-family:'Jua',sans-serif;font-size:15px;padding:10px;margin:4px;}
+    .group-input:focus{outline:none;border-color:#00bcd4;}
+    .ranking-table{width:100%;border-collapse:collapse;margin-top:12px;}
+    .ranking-table th{background:#1a2d4e;color:#3498db;padding:10px;font-size:14px;text-align:center;}
+    .ranking-table td{padding:8px 10px;font-size:14px;border-bottom:1px solid #1a2d4e;text-align:center;}
+    .ranking-table tr:nth-child(1) td{color:#f1c40f;font-size:16px;}
+    .ranking-table tr:nth-child(2) td{color:#bdc3c7;}
+    .ranking-table tr:nth-child(3) td{color:#e67e22;}
+
+    /* 마이룸 상점 */
+    .room-shop-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;width:92%;margin-top:90px;max-height:420px;overflow-y:auto;}
+    .room-shop-card{background:linear-gradient(to bottom,#1a2e1a,#0d1a0d);border:4px solid #2ecc71;padding:14px 10px;text-align:center;color:white;cursor:pointer;transition:all .1s;}
+    .room-shop-card:hover{border-color:#f1c40f;transform:translateY(-3px);}
+    .room-shop-card .item-emoji{font-size:34px;display:block;margin-bottom:6px;}
+    .room-shop-card .item-name{font-size:12px;color:#2ecc71;margin-bottom:4px;}
+    .room-shop-card .item-price{font-size:14px;color:#f1c40f;}
+    .room-shop-card button{margin-top:8px;background:linear-gradient(to bottom,#27ae60,#1e7e43);color:white;border:3px solid #1a0f08;padding:6px 10px;font-family:'Jua',sans-serif;font-size:13px;cursor:pointer;width:100%;}
+    .room-shop-card button:disabled{background:#333;cursor:not-allowed;color:#666;}
+
+    /* 레벨업 토스트 */
+    #levelup-toast{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:linear-gradient(135deg,#f1c40f,#e67e22);border:6px solid #fff;padding:28px 56px;z-index:9999;font-size:32px;color:#1a0f08;text-align:center;border-radius:12px;display:none;animation:toastPop .4s ease;}
+    @keyframes toastPop{0%{transform:translate(-50%,-50%) scale(.5);opacity:0;}100%{transform:translate(-50%,-50%) scale(1);opacity:1;}}
+    .xp-float{position:absolute;color:#c39bd3;font-size:20px;font-family:'Jua',sans-serif;text-shadow:2px 2px 0 #000;pointer-events:none;z-index:9998;animation:floatUp 1.2s ease forwards;}
+    @keyframes floatUp{0%{opacity:1;transform:translateY(0);}100%{opacity:0;transform:translateY(-60px);}}
+
+    /* 로딩 */
+    #loading-overlay{position:absolute;inset:0;background:rgba(0,0,0,.75);z-index:99999;display:none;flex-direction:column;align-items:center;justify-content:center;color:#f1c40f;font-size:22px;gap:16px;}
+    .spinner{width:48px;height:48px;border:6px solid #333;border-top-color:#f1c40f;border-radius:50%;animation:spin .8s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+  </style>
+</head>
+
+<!-- 외부 데이터 파일 -->
+
+<body>
+<script>
+// ══════════════════════════════════════════════════════════
+// 단어 데이터 (wordPool) — 초등 필수 영단어 200개
+// ══════════════════════════════════════════════════════════
+var wordPool = [
+  // 동물
+  {word:"cat",meaning:"고양이"},{word:"dog",meaning:"강아지"},{word:"bird",meaning:"새"},
+  {word:"fish",meaning:"물고기"},{word:"rabbit",meaning:"토끼"},{word:"horse",meaning:"말"},
+  {word:"cow",meaning:"소"},{word:"pig",meaning:"돼지"},{word:"sheep",meaning:"양"},
+  {word:"monkey",meaning:"원숭이"},{word:"tiger",meaning:"호랑이"},{word:"lion",meaning:"사자"},
+  {word:"elephant",meaning:"코끼리"},{word:"bear",meaning:"곰"},{word:"fox",meaning:"여우"},
+  {word:"wolf",meaning:"늑대"},{word:"duck",meaning:"오리"},{word:"frog",meaning:"개구리"},
+  {word:"snake",meaning:"뱀"},{word:"turtle",meaning:"거북이"},
+  // 과일/음식
+  {word:"apple",meaning:"사과"},{word:"banana",meaning:"바나나"},{word:"orange",meaning:"오렌지"},
+  {word:"grape",meaning:"포도"},{word:"strawberry",meaning:"딸기"},{word:"watermelon",meaning:"수박"},
+  {word:"melon",meaning:"멜론"},{word:"peach",meaning:"복숭아"},{word:"cherry",meaning:"체리"},
+  {word:"lemon",meaning:"레몬"},{word:"bread",meaning:"빵"},{word:"rice",meaning:"쌀/밥"},
+  {word:"milk",meaning:"우유"},{word:"egg",meaning:"달걀"},{word:"meat",meaning:"고기"},
+  {word:"fish",meaning:"생선"},{word:"soup",meaning:"수프"},{word:"cake",meaning:"케이크"},
+  {word:"cookie",meaning:"쿠키"},{word:"juice",meaning:"주스"},
+  // 색깔
+  {word:"red",meaning:"빨간색"},{word:"blue",meaning:"파란색"},{word:"green",meaning:"초록색"},
+  {word:"yellow",meaning:"노란색"},{word:"purple",meaning:"보라색"},{word:"orange",meaning:"주황색"},
+  {word:"pink",meaning:"분홍색"},{word:"black",meaning:"검은색"},{word:"white",meaning:"흰색"},
+  {word:"brown",meaning:"갈색"},
+  // 신체
+  {word:"head",meaning:"머리"},{word:"eye",meaning:"눈"},{word:"nose",meaning:"코"},
+  {word:"mouth",meaning:"입"},{word:"ear",meaning:"귀"},{word:"hand",meaning:"손"},
+  {word:"foot",meaning:"발"},{word:"leg",meaning:"다리"},{word:"arm",meaning:"팔"},
+  {word:"finger",meaning:"손가락"},{word:"hair",meaning:"머리카락"},{word:"face",meaning:"얼굴"},
+  // 학교/문구
+  {word:"book",meaning:"책"},{word:"pencil",meaning:"연필"},{word:"pen",meaning:"펜"},
+  {word:"ruler",meaning:"자"},{word:"eraser",meaning:"지우개"},{word:"bag",meaning:"가방"},
+  {word:"desk",meaning:"책상"},{word:"chair",meaning:"의자"},{word:"school",meaning:"학교"},
+  {word:"class",meaning:"수업/반"},{word:"teacher",meaning:"선생님"},{word:"student",meaning:"학생"},
+  // 가족
+  {word:"family",meaning:"가족"},{word:"mother",meaning:"어머니"},{word:"father",meaning:"아버지"},
+  {word:"sister",meaning:"언니/누나/여동생"},{word:"brother",meaning:"오빠/형/남동생"},
+  {word:"grandfather",meaning:"할아버지"},{word:"grandmother",meaning:"할머니"},
+  {word:"baby",meaning:"아기"},{word:"friend",meaning:"친구"},
+  // 자연
+  {word:"sun",meaning:"태양"},{word:"moon",meaning:"달"},{word:"star",meaning:"별"},
+  {word:"sky",meaning:"하늘"},{word:"cloud",meaning:"구름"},{word:"rain",meaning:"비"},
+  {word:"snow",meaning:"눈"},{word:"wind",meaning:"바람"},{word:"tree",meaning:"나무"},
+  {word:"flower",meaning:"꽃"},{word:"grass",meaning:"풀"},{word:"river",meaning:"강"},
+  {word:"sea",meaning:"바다"},{word:"mountain",meaning:"산"},{word:"lake",meaning:"호수"},
+  // 장소
+  {word:"home",meaning:"집"},{word:"park",meaning:"공원"},{word:"hospital",meaning:"병원"},
+  {word:"store",meaning:"가게"},{word:"market",meaning:"시장"},{word:"library",meaning:"도서관"},
+  {word:"church",meaning:"교회"},{word:"airport",meaning:"공항"},{word:"station",meaning:"역"},
+  {word:"restaurant",meaning:"식당"},
+  // 교통
+  {word:"car",meaning:"자동차"},{word:"bus",meaning:"버스"},{word:"train",meaning:"기차"},
+  {word:"plane",meaning:"비행기"},{word:"ship",meaning:"배"},{word:"bike",meaning:"자전거"},
+  {word:"taxi",meaning:"택시"},{word:"truck",meaning:"트럭"},
+  // 동사
+  {word:"run",meaning:"달리다"},{word:"jump",meaning:"뛰다/점프하다"},{word:"eat",meaning:"먹다"},
+  {word:"drink",meaning:"마시다"},{word:"sleep",meaning:"자다"},{word:"play",meaning:"놀다"},
+  {word:"read",meaning:"읽다"},{word:"write",meaning:"쓰다"},{word:"sing",meaning:"노래하다"},
+  {word:"dance",meaning:"춤추다"},{word:"swim",meaning:"수영하다"},{word:"fly",meaning:"날다"},
+  {word:"walk",meaning:"걷다"},{word:"talk",meaning:"말하다"},{word:"look",meaning:"보다"},
+  {word:"listen",meaning:"듣다"},{word:"study",meaning:"공부하다"},{word:"help",meaning:"돕다"},
+  {word:"love",meaning:"사랑하다"},{word:"like",meaning:"좋아하다"},
+  // 형용사
+  {word:"big",meaning:"큰"},{word:"small",meaning:"작은"},{word:"tall",meaning:"키가 큰"},
+  {word:"short",meaning:"키가 작은/짧은"},{word:"long",meaning:"긴"},{word:"fast",meaning:"빠른"},
+  {word:"slow",meaning:"느린"},{word:"hot",meaning:"뜨거운/더운"},{word:"cold",meaning:"차가운/추운"},
+  {word:"happy",meaning:"행복한"},{word:"sad",meaning:"슬픈"},{word:"angry",meaning:"화난"},
+  {word:"funny",meaning:"재미있는"},{word:"nice",meaning:"좋은/친절한"},{word:"good",meaning:"좋은"},
+  {word:"bad",meaning:"나쁜"},{word:"new",meaning:"새로운"},{word:"old",meaning:"오래된/늙은"},
+  {word:"clean",meaning:"깨끗한"},{word:"dirty",meaning:"더러운"},
+  // 숫자/시간
+  {word:"morning",meaning:"아침"},{word:"afternoon",meaning:"오후"},{word:"evening",meaning:"저녁"},
+  {word:"night",meaning:"밤"},{word:"today",meaning:"오늘"},{word:"tomorrow",meaning:"내일"},
+  {word:"yesterday",meaning:"어제"},{word:"week",meaning:"주"},{word:"month",meaning:"달"},
+  {word:"year",meaning:"년/해"},
+  // 스포츠/취미
+  {word:"soccer",meaning:"축구"},{word:"baseball",meaning:"야구"},{word:"basketball",meaning:"농구"},
+  {word:"tennis",meaning:"테니스"},{word:"swimming",meaning:"수영"},{word:"music",meaning:"음악"},
+  {word:"movie",meaning:"영화"},{word:"game",meaning:"게임"},{word:"sport",meaning:"스포츠"},
+  {word:"hobby",meaning:"취미"},
+  // 날씨/계절
+  {word:"spring",meaning:"봄"},{word:"summer",meaning:"여름"},{word:"autumn",meaning:"가을"},
+  {word:"winter",meaning:"겨울"},{word:"sunny",meaning:"맑은"},{word:"rainy",meaning:"비가 오는"},
+  {word:"cloudy",meaning:"흐린"},{word:"windy",meaning:"바람이 부는"},
+  {word:"warm",meaning:"따뜻한"},{word:"cool",meaning:"시원한"},
+];
+
+// ══════════════════════════════════════════════════════════
+// 문법 퀴즈 (grammarBank) — 20레벨 각 10문제
+// ══════════════════════════════════════════════════════════
+var quizBank = { word:{}, grammar:{}, writing:{}, listening:{}, dungeon:{} };
+
+quizBank.grammar = {
+  1: [ // be동사 am/is/are
+    {q:"빈칸에 알맞은 것은? I ___ a student.",a:["am","is","are","be"],c:0},
+    {q:"빈칸에 알맞은 것은? She ___ my friend.",a:["am","is","are","be"],c:1},
+    {q:"빈칸에 알맞은 것은? They ___ happy.",a:["am","is","are","be"],c:2},
+    {q:"빈칸에 알맞은 것은? He ___ tall.",a:["am","is","are","be"],c:1},
+    {q:"빈칸에 알맞은 것은? We ___ students.",a:["am","is","are","be"],c:2},
+    {q:"빈칸에 알맞은 것은? It ___ a cat.",a:["am","is","are","be"],c:1},
+    {q:"빈칸에 알맞은 것은? You ___ kind.",a:["am","is","are","be"],c:2},
+    {q:"'나는 학생이다'를 영어로 하면?",a:["I am a student.","I is a student.","I are a student.","I be a student."],c:0},
+    {q:"'그녀는 예쁘다'를 영어로 하면?",a:["She am pretty.","She is pretty.","She are pretty.","She be pretty."],c:1},
+    {q:"'그들은 친구이다'를 영어로 하면?",a:["They am friends.","They is friends.","They are friends.","They be friends."],c:2},
+  ],
+  2: [ // 관사 a/an/the
+    {q:"빈칸에 알맞은 것은? I have ___ apple.",a:["a","an","the","없음"],c:1},
+    {q:"빈칸에 알맞은 것은? She is ___ teacher.",a:["a","an","the","없음"],c:0},
+    {q:"빈칸에 알맞은 것은? ___ sun is bright.",a:["A","An","The","없음"],c:2},
+    {q:"'an'을 쓰는 경우는?",a:["book","dog","egg","cat"],c:2},
+    {q:"빈칸에 알맞은 것은? He has ___ orange.",a:["a","an","the","없음"],c:1},
+    {q:"'a'를 쓰는 경우는?",a:["apple","egg","umbrella","ball"],c:3},
+    {q:"빈칸에 알맞은 것은? ___ moon is beautiful.",a:["A","An","The","없음"],c:2},
+    {q:"빈칸에 알맞은 것은? I saw ___ elephant.",a:["a","an","the","없음"],c:1},
+    {q:"빈칸에 알맞은 것은? She has ___ dog.",a:["a","an","the","없음"],c:0},
+    {q:"'an'은 어떤 단어 앞에 쓰나요?",a:["자음으로 시작하는 단어","모음으로 시작하는 단어","항상","절대 안 씀"],c:1},
+  ],
+  3: [ // 복수형
+    {q:"'cat'의 복수형은?",a:["cats","cates","caties","cat"],c:0},
+    {q:"'box'의 복수형은?",a:["boxs","boxes","boxies","box"],c:1},
+    {q:"'child'의 복수형은?",a:["childs","childes","children","child"],c:2},
+    {q:"'tooth'의 복수형은?",a:["tooths","toothes","teeth","tooth"],c:2},
+    {q:"'book'의 복수형은?",a:["books","bookes","bookies","book"],c:0},
+    {q:"'bus'의 복수형은?",a:["buss","buses","busies","bus"],c:1},
+    {q:"'foot'의 복수형은?",a:["foots","footes","feet","foot"],c:2},
+    {q:"'dish'의 복수형은?",a:["dishs","dishes","dishies","dish"],c:1},
+    {q:"'man'의 복수형은?",a:["mans","manes","men","man"],c:2},
+    {q:"'dog'의 복수형은?",a:["dogs","doges","dogies","dog"],c:0},
+  ],
+  4: [ // 현재진행형 -ing
+    {q:"'run'의 -ing형은?",a:["runing","running","runeing","runs"],c:1},
+    {q:"'swim'의 -ing형은?",a:["swiming","swimming","swimeing","swims"],c:1},
+    {q:"'make'의 -ing형은?",a:["makeing","making","macking","makes"],c:1},
+    {q:"'play'의 -ing형은?",a:["playing","plaing","playying","plays"],c:0},
+    {q:"'eat'의 -ing형은?",a:["eating","eatting","eating","eats"],c:0},
+    {q:"'write'의 -ing형은?",a:["writeing","writing","writting","writes"],c:1},
+    {q:"'sit'의 -ing형은?",a:["siting","sitting","siteing","sits"],c:1},
+    {q:"'dance'의 -ing형은?",a:["danceing","dancing","dansing","dances"],c:1},
+    {q:"현재진행형의 형태는?",a:["am/is/are + 동사원형","am/is/are + 동사-ing","do/does + 동사원형","did + 동사원형"],c:1},
+    {q:"'She is ___ now.'에 알맞은 것은?",a:["sing","singing","singed","sings"],c:1},
+  ],
+  5: [ // 일반동사 현재형 3인칭단수
+    {q:"'He ___ soccer.' 빈칸에 알맞은 것은?",a:["play","plays","played","playing"],c:1},
+    {q:"'She ___ to school.' 빈칸에 알맞은 것은?",a:["go","goes","went","going"],c:1},
+    {q:"'He ___ an apple.' 빈칸에 알맞은 것은?",a:["eat","eats","ate","eating"],c:1},
+    {q:"3인칭 단수 현재형에서 -es를 붙이는 단어는?",a:["play","go","eat","read"],c:1},
+    {q:"'She ___ her homework.' 빈칸에 알맞은 것은?",a:["do","does","did","doing"],c:1},
+    {q:"'He ___ the piano.' 빈칸에 알맞은 것은?",a:["play","plays","played","playing"],c:1},
+    {q:"'She ___ milk.' 빈칸에 알맞은 것은?",a:["drink","drinks","drank","drinking"],c:1},
+    {q:"3인칭 단수 주어가 아닌 것은?",a:["he","she","it","they"],c:3},
+    {q:"'He ___ English.' 빈칸에 알맞은 것은?",a:["study","studies","studied","studying"],c:1},
+    {q:"'She ___ a book.' 빈칸에 알맞은 것은?",a:["read","reads","readed","reading"],c:1},
+  ],
+  6: [ // 과거형 규칙동사
+    {q:"'play'의 과거형은?",a:["plaied","played","playes","playing"],c:1},
+    {q:"'jump'의 과거형은?",a:["jumed","jumped","jumpes","jumping"],c:1},
+    {q:"'walk'의 과거형은?",a:["walkd","walked","walkes","walking"],c:1},
+    {q:"'stop'의 과거형은?",a:["stoped","stopped","stoples","stopping"],c:1},
+    {q:"'like'의 과거형은?",a:["likeed","liked","likes","liking"],c:1},
+    {q:"'study'의 과거형은?",a:["studyed","studied","studies","studying"],c:1},
+    {q:"규칙동사 과거형 만드는 방법은?",a:["동사원형+ing","동사원형+ed","동사원형+s","동사원형+er"],c:1},
+    {q:"'talk'의 과거형은?",a:["talkd","talked","talkes","talking"],c:1},
+    {q:"'watch'의 과거형은?",a:["watchd","watched","watchied","watching"],c:1},
+    {q:"'clean'의 과거형은?",a:["cleand","cleaned","cleanes","cleaning"],c:1},
+  ],
+  7: [ // 과거형 불규칙동사
+    {q:"'go'의 과거형은?",a:["goed","goes","went","going"],c:2},
+    {q:"'eat'의 과거형은?",a:["eated","eats","ate","eating"],c:2},
+    {q:"'come'의 과거형은?",a:["comed","comes","came","coming"],c:2},
+    {q:"'see'의 과거형은?",a:["seed","sees","saw","seeing"],c:2},
+    {q:"'have'의 과거형은?",a:["haved","has","had","having"],c:2},
+    {q:"'make'의 과거형은?",a:["maked","makes","made","making"],c:2},
+    {q:"'run'의 과거형은?",a:["runed","runs","ran","running"],c:2},
+    {q:"'drink'의 과거형은?",a:["drinked","drinks","drank","drinking"],c:2},
+    {q:"'give'의 과거형은?",a:["gived","gives","gave","giving"],c:2},
+    {q:"'write'의 과거형은?",a:["writed","writes","wrote","writing"],c:2},
+  ],
+  8: [ // 의문문/부정문
+    {q:"'I like cats.'의 의문문은?",a:["Do I like cats?","Does I like cats?","Am I like cats?","Is I like cats?"],c:0},
+    {q:"'She likes dogs.'의 의문문은?",a:["Do she like dogs?","Does she like dogs?","Is she like dogs?","Are she like dogs?"],c:1},
+    {q:"'I don't ___.' 빈칸에 알맞은 것은?",a:["likes","liked","like","liking"],c:2},
+    {q:"'He doesn't ___.' 빈칸에 알맞은 것은?",a:["plays","played","play","playing"],c:2},
+    {q:"'Do you have a pen?' 대답으로 알맞은 것은?",a:["Yes, I do.","Yes, I does.","Yes, I am.","Yes, I have."],c:0},
+    {q:"'Does she play tennis?' 대답으로 알맞은 것은?",a:["Yes, she do.","Yes, she does.","Yes, she is.","Yes, she plays."],c:1},
+    {q:"'I like cats.'의 부정문은?",a:["I don't like cats.","I doesn't like cats.","I am not like cats.","I not like cats."],c:0},
+    {q:"'She likes dogs.'의 부정문은?",a:["She don't like dogs.","She doesn't like dogs.","She isn't like dogs.","She not like dogs."],c:1},
+    {q:"의문문에서 do/does 다음에 오는 동사의 형태는?",a:["과거형","3인칭단수형","동사원형","현재진행형"],c:2},
+    {q:"'Are you a student?' 대답으로 알맞은 것은?",a:["Yes, I am.","Yes, I is.","Yes, I are.","Yes, I do."],c:0},
+  ],
+  9: [ // 형용사/부사
+    {q:"'very'는 무엇을 꾸미는가?",a:["명사","형용사/부사","동사","전치사"],c:1},
+    {q:"'She is a ___ girl.' 빈칸에 올 수 있는 것은?",a:["run","quickly","beautiful","fast"],c:2},
+    {q:"'He runs ___.' 빈칸에 올 수 있는 것은?",a:["quick","fast","happy","good"],c:1},
+    {q:"'slow'의 부사형은?",a:["slowy","slowly","slower","slowest"],c:1},
+    {q:"형용사가 아닌 것은?",a:["happy","sadly","tall","small"],c:1},
+    {q:"'She sings ___.' 빈칸에 알맞은 것은?",a:["beautiful","beautifully","beauty","beauteous"],c:1},
+    {q:"'good'의 부사형은?",a:["goodly","goody","well","betterly"],c:2},
+    {q:"부사가 아닌 것은?",a:["quickly","happily","tall","loudly"],c:2},
+    {q:"'very'의 의미는?",a:["조금","아주/매우","가끔","항상"],c:1},
+    {q:"'He is a ___ boy.' 빈칸에 올 수 있는 것은?",a:["kindly","nicely","kind","well"],c:2},
+  ],
+  10: [ // 전치사
+    {q:"'The book is ___ the desk.' (책이 책상 위에) 빈칸은?",a:["in","on","under","behind"],c:1},
+    {q:"'The cat is ___ the box.' (고양이가 상자 안에) 빈칸은?",a:["on","in","under","next to"],c:1},
+    {q:"'The ball is ___ the table.' (공이 탁자 아래에) 빈칸은?",a:["on","in","under","above"],c:2},
+    {q:"'I go to school ___ 8 o'clock.' 빈칸은?",a:["in","on","at","for"],c:2},
+    {q:"'She was born ___ Monday.' 빈칸은?",a:["in","on","at","for"],c:1},
+    {q:"'He was born ___ 2010.' 빈칸은?",a:["in","on","at","for"],c:0},
+    {q:"'The dog is ___ the chair.' (의자 뒤에) 빈칸은?",a:["in front of","behind","next to","between"],c:1},
+    {q:"'I study ___ the morning.' 빈칸은?",a:["in","on","at","for"],c:0},
+    {q:"'She lives ___ Seoul.' 빈칸은?",a:["in","on","at","for"],c:0},
+    {q:"'He is ___ home.' 빈칸은?",a:["in","on","at","for"],c:2},
+  ],
+  11:[{q:"'will'의 의미는?",a:["~이었다","~할 것이다","~해야 한다","~할 수 있다"],c:1},{q:"'I will go.' 부정문은?",a:["I won't go.","I willn't go.","I don't will go.","I not will go."],c:0},{q:"'She will come.'의 의문문은?",a:["Do she will come?","Will she come?","Does she will come?","Is she will come?"],c:1},{q:"미래를 나타내는 표현이 아닌 것은?",a:["will","be going to","yesterday","next week"],c:2},{q:"'I am going to ___.' 빈칸에 알맞은 것은?",a:["study","studies","studied","studying"],c:0},{q:"'Will you help me?' 긍정 대답은?",a:["Yes, I will.","Yes, I do.","Yes, I am.","Yes, I can."],c:0},{q:"'She will ___.' 빈칸에 알맞은 것은?",a:["sings","singing","sing","sang"],c:2},{q:"'I will not go.'의 줄임말은?",a:["I willn't go.","I won't go.","I wouldn't go.","I don't go."],c:1},{q:"'Are you going to study?' 부정 대답은?",a:["No, I'm not.","No, I won't.","No, I don't.","No, I haven't."],c:0},{q:"'will' 다음에 오는 동사 형태는?",a:["과거형","동사원형","3인칭단수형","현재진행형"],c:1}],
+  12:[{q:"'can'의 의미는?",a:["~해야 한다","~할 것이다","~할 수 있다","~했다"],c:2},{q:"'I can swim.'의 부정문은?",a:["I can't swim.","I don't can swim.","I cannot can swim.","I no can swim."],c:0},{q:"'Can she dance?' 긍정 대답은?",a:["Yes, she can.","Yes, she do.","Yes, she is.","Yes, she will."],c:0},{q:"'must'의 의미는?",a:["~할 수 있다","~할 것이다","~해야 한다","~했다"],c:2},{q:"'You must ___.' 빈칸에 알맞은 것은?",a:["studies","studied","study","studying"],c:2},{q:"'can' 다음에 오는 동사 형태는?",a:["과거형","동사원형","3인칭단수형","현재진행형"],c:1},{q:"'should'의 의미는?",a:["~할 수 있다","~해야 한다(권유)","~할 것이다","~했다"],c:1},{q:"'He can ___.' 빈칸에 알맞은 것은?",a:["plays","playing","played","play"],c:3},{q:"'You should ___ more.'에 알맞은 것은?",a:["studies","study","studying","studied"],c:1},{q:"조동사가 아닌 것은?",a:["can","will","must","play"],c:3}],
+  13:[{q:"'Who'는 무엇을 묻는가?",a:["장소","시간","사람","이유"],c:2},{q:"'Where'는 무엇을 묻는가?",a:["장소","시간","사람","이유"],c:0},{q:"'When'은 무엇을 묻는가?",a:["장소","시간","사람","이유"],c:1},{q:"'What'은 무엇을 묻는가?",a:["장소","시간","사물/무엇","이유"],c:2},{q:"'Why'는 무엇을 묻는가?",a:["장소","시간","사람","이유"],c:3},{q:"'___ is she?' — '그녀는 누구입니까?' 빈칸은?",a:["Where","When","Who","What"],c:2},{q:"'___ do you live?' — '어디에 삽니까?' 빈칸은?",a:["Where","When","Who","What"],c:0},{q:"'___ is your birthday?' — '생일이 언제예요?' 빈칸은?",a:["Where","When","Who","What"],c:1},{q:"'___ is this?' — '이것이 무엇입니까?' 빈칸은?",a:["Where","When","Who","What"],c:3},{q:"'How'는 무엇을 묻는가?",a:["장소","방법/상태","사람","이유"],c:1}],
+  14:[{q:"비교급을 만들 때 짧은 단어에는?",a:["-est를 붙인다","-er을 붙인다","more를 붙인다","most를 붙인다"],c:1},{q:"'tall'의 비교급은?",a:["taller","tallest","more tall","most tall"],c:0},{q:"'tall'의 최상급은?",a:["taller","tallest","more tall","most tall"],c:1},{q:"'beautiful'의 비교급은?",a:["beautifuler","beautifulest","more beautiful","most beautiful"],c:2},{q:"'good'의 비교급은?",a:["gooder","goodest","better","best"],c:2},{q:"'good'의 최상급은?",a:["gooder","goodest","better","best"],c:3},{q:"'bad'의 비교급은?",a:["badder","baddest","worse","worst"],c:2},{q:"비교급 문장에서 'than'의 의미는?",a:["그리고","또는","~보다","~처럼"],c:2},{q:"'She is ___ than me.' 빈칸에 알맞은 것은?",a:["tall","taller","tallest","most tall"],c:1},{q:"최상급 앞에 오는 관사는?",a:["a","an","the","없음"],c:2}],
+  15:[{q:"현재완료형의 형태는?",a:["have/has + 동사원형","have/has + 과거형","have/has + 과거분사","have/has + 현재분사"],c:2},{q:"'go'의 과거분사는?",a:["goed","went","gone","going"],c:2},{q:"'eat'의 과거분사는?",a:["eated","ate","eaten","eating"],c:2},{q:"'I have ___ my homework.' 빈칸은?",a:["do","did","done","doing"],c:2},{q:"'She has ___ to Japan.' 빈칸은?",a:["go","went","gone","going"],c:2},{q:"현재완료가 쓰이는 경우가 아닌 것은?",a:["경험","완료","계속","미래"],c:3},{q:"'Have you ever ___ sushi?' 빈칸은?",a:["eat","ate","eaten","eating"],c:2},{q:"'see'의 과거분사는?",a:["seed","saw","seen","seeing"],c:2},{q:"'write'의 과거분사는?",a:["writed","wrote","written","writing"],c:2},{q:"'I have never ___ skiing.' 빈칸은?",a:["go","went","gone","going"],c:2}],
+  16:[{q:"'and'의 의미는?",a:["그러나","그래서","그리고","또는"],c:2},{q:"'but'의 의미는?",a:["그러나","그래서","그리고","또는"],c:0},{q:"'so'의 의미는?",a:["그러나","그래서","그리고","또는"],c:1},{q:"'or'의 의미는?",a:["그러나","그래서","그리고","또는"],c:3},{q:"'because'의 의미는?",a:["~할 때","~이기 때문에","~하기 위해서","~하지만"],c:1},{q:"'when'의 의미는?",a:["~할 때","~이기 때문에","~하기 위해서","~하지만"],c:0},{q:"'I like cats ___ dogs.' (그리고) 빈칸은?",a:["but","so","and","or"],c:2},{q:"'I am tired, ___ I will sleep.' (그래서) 빈칸은?",a:["but","so","and","or"],c:1},{q:"'I like summer ___ not winter.' (그러나) 빈칸은?",a:["but","so","and","or"],c:0},{q:"'I am hungry ___ I will eat.' 빈칸은?",a:["but","so","and","or"],c:1}],
+  17:[{q:"'if'의 의미는?",a:["~할 때","~이기 때문에","만약 ~라면","~하지만"],c:2},{q:"'If it rains, I ___ stay home.' 빈칸은?",a:["will","would","am","was"],c:0},{q:"'unless'의 의미는?",a:["만약 ~라면","만약 ~가 아니라면","~할 때","~이기 때문에"],c:1},{q:"조건절에서 if 다음 동사의 시제는?",a:["미래","현재","과거","현재완료"],c:1},{q:"'If she studies hard, she ___ pass.' 빈칸은?",a:["will","would","can","should"],c:0},{q:"'If I were a bird, I ___ fly.' 빈칸은?",a:["will","would","can","should"],c:1},{q:"'While'의 의미는?",a:["만약","~하는 동안","~이기 때문에","~할 때까지"],c:1},{q:"'until'의 의미는?",a:["만약","~하는 동안","~이기 때문에","~할 때까지"],c:3},{q:"'Although'의 의미는?",a:["~이기 때문에","비록 ~이지만","만약","~할 때"],c:1},{q:"'Since'의 의미는? (이유)",a:["~이기 때문에","~이후로","만약","~할 때"],c:0}],
+  18:[{q:"수동태의 형태는?",a:["be + 과거분사","be + 동사원형","be + 현재분사","be + 과거형"],c:0},{q:"'The cake was ___ by her.' 빈칸은?",a:["make","made","makes","making"],c:1},{q:"수동태에서 행위자 앞에 오는 전치사는?",a:["to","for","by","with"],c:2},{q:"'He broke the window.'의 수동태는?",a:["The window broke by him.","The window was broke by him.","The window was broken by him.","The window is broken by him."],c:2},{q:"수동태의 주어는?",a:["행위자","행동을 당하는 것","동사","목적어"],c:1},{q:"'She writes letters.'의 수동태는?",a:["Letters write by her.","Letters was written by her.","Letters are written by her.","Letters written by her."],c:2},{q:"'be made of'의 의미는?",a:["~로 만들어지다(변화 없음)","~로 만들어지다(변화)","~에 의해 만들어지다","~을 만들다"],c:0},{q:"'be made from'의 의미는?",a:["~로 만들어지다(변화 없음)","~로 만들어지다(변화O)","~에 의해 만들어지다","~을 만들다"],c:1},{q:"'The song was sung ___ her.' 빈칸은?",a:["to","for","by","with"],c:2},{q:"'The book ___ read by many people.' 빈칸은?",a:["is","are","were","been"],c:0}],
+  19:[{q:"관계대명사 'who'는 어떤 경우에 쓰나요?",a:["사물을 꾸밀 때","사람을 꾸밀 때","장소를 꾸밀 때","시간을 꾸밀 때"],c:1},{q:"관계대명사 'which'는 어떤 경우에 쓰나요?",a:["사물을 꾸밀 때","사람을 꾸밀 때","장소를 꾸밀 때","시간을 꾸밀 때"],c:0},{q:"'The boy ___ is tall is my friend.' 빈칸은?",a:["which","who","where","when"],c:1},{q:"'The book ___ I read is great.' 빈칸은?",a:["who","whom","which","where"],c:2},{q:"관계부사 'where'는 어떤 경우에 쓰나요?",a:["사물을 꾸밀 때","사람을 꾸밀 때","장소를 꾸밀 때","시간을 꾸밀 때"],c:2},{q:"'that'은 관계대명사로 언제 쓰나요?",a:["사람만","사물만","사람과 사물 모두","장소"],c:2},{q:"'This is the house ___ I was born.' 빈칸은?",a:["who","which","where","when"],c:2},{q:"'She is the girl ___ I like.' 빈칸은?",a:["who","which","where","when"],c:0},{q:"관계대명사절은 무엇을 꾸미나요?",a:["동사","부사","명사","형용사"],c:2},{q:"'The day ___ we met was special.' 빈칸은?",a:["who","which","where","when"],c:3}],
+  20:[{q:"가정법 과거의 형태는?",a:["If + 현재, will + 동사원형","If + 과거, would + 동사원형","If + 현재완료, would + 동사원형","If + 미래, will + 동사원형"],c:1},{q:"'If I ___ rich, I would travel.' 빈칸은?",a:["am","was","were","will be"],c:2},{q:"'I wish I ___ a bird.' 빈칸은?",a:["am","was","were","will be"],c:2},{q:"가정법 과거는 실제로 무엇을 나타내나요?",a:["실제 사실","현재 불가능한 상황","과거 사실","미래 계획"],c:1},{q:"'If she studied hard, she ___ pass.' 빈칸은?",a:["will","would","can","should"],c:1},{q:"'I wish I ___ fly like a bird.' 빈칸은?",a:["can","could","will","would"],c:1},{q:"'as if'의 의미는?",a:["만약","마치 ~인 것처럼","~이기 때문에","~할 때"],c:1},{q:"'He talks as if he ___ everything.' 빈칸은?",a:["knows","knew","will know","has known"],c:1},{q:"가정법 과거에서 'be동사'는?",a:["am/is/are","was/were","were (모든 주어)","be"],c:2},{q:"'If only I ___ taller!' 빈칸은?",a:["am","is","were","will be"],c:2}],
+};
+
+// ══════════════════════════════════════════════════════════
+// 작문 퀴즈 (writingBank) — 문장 배열 — 20레벨 각 10문제
+// ══════════════════════════════════════════════════════════
+quizBank.writing = {
+  1:[
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["I","am","a","student"],ans:"I am a student"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["She","is","my","friend"],ans:"She is my friend"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["He","is","tall"],ans:"He is tall"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["We","are","happy"],ans:"We are happy"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["It","is","a","cat"],ans:"It is a cat"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["They","are","students"],ans:"They are students"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["You","are","kind"],ans:"You are kind"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["I","am","happy"],ans:"I am happy"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["She","is","pretty"],ans:"She is pretty"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["He","is","strong"],ans:"He is strong"},
+  ],
+  2:[
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["I","have","a","book"],ans:"I have a book"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["She","has","an","apple"],ans:"She has an apple"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["I","like","cats"],ans:"I like cats"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["He","plays","soccer"],ans:"He plays soccer"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["She","eats","an","orange"],ans:"She eats an orange"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["I","go","to","school"],ans:"I go to school"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["He","has","a","dog"],ans:"He has a dog"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["She","drinks","milk"],ans:"She drinks milk"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["I","read","books"],ans:"I read books"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["They","play","games"],ans:"They play games"},
+  ],
+  3:[
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["I","am","not","hungry"],ans:"I am not hungry"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["She","is","not","tall"],ans:"She is not tall"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["I","don't","like","fish"],ans:"I don't like fish"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["He","doesn't","play","tennis"],ans:"He doesn't play tennis"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["Are","you","a","student"],ans:"Are you a student"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["Do","you","like","cats"],ans:"Do you like cats"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["Does","she","like","dogs"],ans:"Does she like dogs"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["Is","he","tall"],ans:"Is he tall"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["They","are","not","happy"],ans:"They are not happy"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["We","don't","eat","meat"],ans:"We don't eat meat"},
+  ],
+  4:[
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["She","is","running","now"],ans:"She is running now"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["He","is","eating","lunch"],ans:"He is eating lunch"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["I","am","studying","English"],ans:"I am studying English"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["They","are","playing","soccer"],ans:"They are playing soccer"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["She","is","dancing","happily"],ans:"She is dancing happily"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["We","are","watching","TV"],ans:"We are watching TV"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["He","is","swimming","fast"],ans:"He is swimming fast"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["I","am","reading","a","book"],ans:"I am reading a book"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["She","is","singing","a","song"],ans:"She is singing a song"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["They","are","sleeping","now"],ans:"They are sleeping now"},
+  ],
+  5:[
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["I","played","soccer","yesterday"],ans:"I played soccer yesterday"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["She","went","to","school"],ans:"She went to school"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["He","ate","an","apple"],ans:"He ate an apple"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["They","watched","a","movie"],ans:"They watched a movie"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["I","studied","English","hard"],ans:"I studied English hard"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["She","drank","milk"],ans:"She drank milk"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["He","ran","very","fast"],ans:"He ran very fast"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["We","had","lunch","together"],ans:"We had lunch together"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["I","saw","a","big","dog"],ans:"I saw a big dog"},
+    {q:"다음 단어를 배열하여 문장을 완성하세요.",blocks:["She","made","a","cake"],ans:"She made a cake"},
+  ],
+  6:[{q:"다음을 배열하세요.",blocks:["I","will","go","to","the","park"],ans:"I will go to the park"},{q:"다음을 배열하세요.",blocks:["She","will","sing","a","song"],ans:"She will sing a song"},{q:"다음을 배열하세요.",blocks:["He","will","not","come","today"],ans:"He will not come today"},{q:"다음을 배열하세요.",blocks:["Will","you","help","me"],ans:"Will you help me"},{q:"다음을 배열하세요.",blocks:["I","am","going","to","study"],ans:"I am going to study"},{q:"다음을 배열하세요.",blocks:["She","is","going","to","cook"],ans:"She is going to cook"},{q:"다음을 배열하세요.",blocks:["They","will","be","happy"],ans:"They will be happy"},{q:"다음을 배열하세요.",blocks:["I","will","eat","pizza","tomorrow"],ans:"I will eat pizza tomorrow"},{q:"다음을 배열하세요.",blocks:["She","will","not","go","out"],ans:"She will not go out"},{q:"다음을 배열하세요.",blocks:["He","is","going","to","run"],ans:"He is going to run"}],
+  7:[{q:"다음을 배열하세요.",blocks:["Can","you","swim"],ans:"Can you swim"},{q:"다음을 배열하세요.",blocks:["I","can","play","the","piano"],ans:"I can play the piano"},{q:"다음을 배열하세요.",blocks:["She","cannot","fly"],ans:"She cannot fly"},{q:"다음을 배열하세요.",blocks:["You","must","be","quiet"],ans:"You must be quiet"},{q:"다음을 배열하세요.",blocks:["I","should","study","hard"],ans:"I should study hard"},{q:"다음을 배열하세요.",blocks:["He","can","run","fast"],ans:"He can run fast"},{q:"다음을 배열하세요.",blocks:["We","must","wash","our","hands"],ans:"We must wash our hands"},{q:"다음을 배열하세요.",blocks:["She","should","eat","vegetables"],ans:"She should eat vegetables"},{q:"다음을 배열하세요.",blocks:["Can","she","speak","English"],ans:"Can she speak English"},{q:"다음을 배열하세요.",blocks:["I","can","not","drive","a","car"],ans:"I can not drive a car"}],
+  8:[{q:"다음을 배열하세요.",blocks:["Who","is","she"],ans:"Who is she"},{q:"다음을 배열하세요.",blocks:["Where","do","you","live"],ans:"Where do you live"},{q:"다음을 배열하세요.",blocks:["What","is","your","name"],ans:"What is your name"},{q:"다음을 배열하세요.",blocks:["When","is","your","birthday"],ans:"When is your birthday"},{q:"다음을 배열하세요.",blocks:["Why","are","you","sad"],ans:"Why are you sad"},{q:"다음을 배열하세요.",blocks:["How","are","you"],ans:"How are you"},{q:"다음을 배열하세요.",blocks:["What","time","is","it"],ans:"What time is it"},{q:"다음을 배열하세요.",blocks:["How","old","are","you"],ans:"How old are you"},{q:"다음을 배열하세요.",blocks:["Where","is","my","bag"],ans:"Where is my bag"},{q:"다음을 배열하세요.",blocks:["Who","made","this","cake"],ans:"Who made this cake"}],
+  9:[{q:"다음을 배열하세요.",blocks:["She","is","taller","than","me"],ans:"She is taller than me"},{q:"다음을 배열하세요.",blocks:["He","is","the","tallest","in","class"],ans:"He is the tallest in class"},{q:"다음을 배열하세요.",blocks:["This","is","more","beautiful","than","that"],ans:"This is more beautiful than that"},{q:"다음을 배열하세요.",blocks:["She","is","the","most","beautiful"],ans:"She is the most beautiful"},{q:"다음을 배열하세요.",blocks:["He","runs","faster","than","I"],ans:"He runs faster than I"},{q:"다음을 배열하세요.",blocks:["Math","is","harder","than","English"],ans:"Math is harder than English"},{q:"다음을 배열하세요.",blocks:["Summer","is","hotter","than","spring"],ans:"Summer is hotter than spring"},{q:"다음을 배열하세요.",blocks:["She","is","as","tall","as","me"],ans:"She is as tall as me"},{q:"다음을 배열하세요.",blocks:["He","is","the","best","player"],ans:"He is the best player"},{q:"다음을 배열하세요.",blocks:["This","book","is","more","interesting"],ans:"This book is more interesting"}],
+  10:[{q:"다음을 배열하세요.",blocks:["I","have","been","to","Japan"],ans:"I have been to Japan"},{q:"다음을 배열하세요.",blocks:["She","has","eaten","sushi"],ans:"She has eaten sushi"},{q:"다음을 배열하세요.",blocks:["He","has","done","his","homework"],ans:"He has done his homework"},{q:"다음을 배열하세요.",blocks:["I","have","never","seen","a","panda"],ans:"I have never seen a panda"},{q:"다음을 배열하세요.",blocks:["Have","you","ever","been","to","Paris"],ans:"Have you ever been to Paris"},{q:"다음을 배열하세요.",blocks:["She","has","already","finished","it"],ans:"She has already finished it"},{q:"다음을 배열하세요.",blocks:["I","have","just","eaten","lunch"],ans:"I have just eaten lunch"},{q:"다음을 배열하세요.",blocks:["He","has","not","come","yet"],ans:"He has not come yet"},{q:"다음을 배열하세요.",blocks:["They","have","lived","here","long"],ans:"They have lived here long"},{q:"다음을 배열하세요.",blocks:["She","has","lost","her","key"],ans:"She has lost her key"}],
+  11:[{q:"다음을 배열하세요.",blocks:["I","like","cats","and","dogs"],ans:"I like cats and dogs"},{q:"다음을 배열하세요.",blocks:["She","is","smart","but","lazy"],ans:"She is smart but lazy"},{q:"다음을 배열하세요.",blocks:["I","am","tired","so","I","will","sleep"],ans:"I am tired so I will sleep"},{q:"다음을 배열하세요.",blocks:["She","cried","because","she","was","sad"],ans:"She cried because she was sad"},{q:"다음을 배열하세요.",blocks:["I","study","when","I","have","time"],ans:"I study when I have time"},{q:"다음을 배열하세요.",blocks:["He","is","tall","and","handsome"],ans:"He is tall and handsome"},{q:"다음을 배열하세요.",blocks:["Tea","or","coffee"],ans:"Tea or coffee"},{q:"다음을 배열하세요.",blocks:["I","was","hungry","so","I","ate"],ans:"I was hungry so I ate"},{q:"다음을 배열하세요.",blocks:["She","sang","while","dancing"],ans:"She sang while dancing"},{q:"다음을 배열하세요.",blocks:["I","like","him","although","he","is","strict"],ans:"I like him although he is strict"}],
+  12:[{q:"다음을 배열하세요.",blocks:["If","it","rains","I","will","stay"],ans:"If it rains I will stay"},{q:"다음을 배열하세요.",blocks:["If","you","study","you","will","pass"],ans:"If you study you will pass"},{q:"다음을 배열하세요.",blocks:["If","she","comes","we","will","eat"],ans:"If she comes we will eat"},{q:"다음을 배열하세요.",blocks:["If","I","were","rich","I","would","travel"],ans:"If I were rich I would travel"},{q:"다음을 배열하세요.",blocks:["I","wish","I","were","taller"],ans:"I wish I were taller"},{q:"다음을 배열하세요.",blocks:["If","it","is","sunny","we","will","go"],ans:"If it is sunny we will go"},{q:"다음을 배열하세요.",blocks:["Unless","you","hurry","you","will","be","late"],ans:"Unless you hurry you will be late"},{q:"다음을 배열하세요.",blocks:["If","I","could","fly","I","would","be","happy"],ans:"If I could fly I would be happy"},{q:"다음을 배열하세요.",blocks:["If","he","studies","he","will","succeed"],ans:"If he studies he will succeed"},{q:"다음을 배열하세요.",blocks:["I","wish","I","could","swim","well"],ans:"I wish I could swim well"}],
+  13:[{q:"다음을 배열하세요.",blocks:["The","cake","was","made","by","her"],ans:"The cake was made by her"},{q:"다음을 배열하세요.",blocks:["English","is","spoken","everywhere"],ans:"English is spoken everywhere"},{q:"다음을 배열하세요.",blocks:["The","book","was","written","in","1990"],ans:"The book was written in 1990"},{q:"다음을 배열하세요.",blocks:["The","window","was","broken","by","him"],ans:"The window was broken by him"},{q:"다음을 배열하세요.",blocks:["Rice","is","eaten","in","Korea"],ans:"Rice is eaten in Korea"},{q:"다음을 배열하세요.",blocks:["This","song","was","sung","by","her"],ans:"This song was sung by her"},{q:"다음을 배열하세요.",blocks:["The","letter","was","sent","by","him"],ans:"The letter was sent by him"},{q:"다음을 배열하세요.",blocks:["The","dog","was","saved","by","a","man"],ans:"The dog was saved by a man"},{q:"다음을 배열하세요.",blocks:["Dinner","is","cooked","by","mom"],ans:"Dinner is cooked by mom"},{q:"다음을 배열하세요.",blocks:["The","movie","was","made","in","2020"],ans:"The movie was made in 2020"}],
+  14:[{q:"다음을 배열하세요.",blocks:["The","boy","who","is","tall","is","Tom"],ans:"The boy who is tall is Tom"},{q:"다음을 배열하세요.",blocks:["The","book","that","I","read","is","good"],ans:"The book that I read is good"},{q:"다음을 배열하세요.",blocks:["She","is","the","girl","who","I","like"],ans:"She is the girl who I like"},{q:"다음을 배열하세요.",blocks:["This","is","the","place","where","I","live"],ans:"This is the place where I live"},{q:"다음을 배열하세요.",blocks:["The","dog","which","I","have","is","cute"],ans:"The dog which I have is cute"},{q:"다음을 배열하세요.",blocks:["He","is","the","man","that","helped","me"],ans:"He is the man that helped me"},{q:"다음을 배열하세요.",blocks:["I","remember","the","day","when","we","met"],ans:"I remember the day when we met"},{q:"다음을 배열하세요.",blocks:["She","is","a","girl","who","loves","music"],ans:"She is a girl who loves music"},{q:"다음을 배열하세요.",blocks:["The","song","that","she","sang","was","great"],ans:"The song that she sang was great"},{q:"다음을 배열하세요.",blocks:["This","is","the","reason","why","I","cried"],ans:"This is the reason why I cried"}],
+  15:[{q:"다음을 배열하세요.",blocks:["I","want","to","be","a","doctor"],ans:"I want to be a doctor"},{q:"다음을 배열하세요.",blocks:["She","likes","to","dance"],ans:"She likes to dance"},{q:"다음을 배열하세요.",blocks:["He","hopes","to","travel","the","world"],ans:"He hopes to travel the world"},{q:"다음을 배열하세요.",blocks:["I","enjoy","swimming"],ans:"I enjoy swimming"},{q:"다음을 배열하세요.",blocks:["She","loves","singing"],ans:"She loves singing"},{q:"다음을 배열하세요.",blocks:["He","decided","to","study","hard"],ans:"He decided to study hard"},{q:"다음을 배열하세요.",blocks:["I","finished","reading","the","book"],ans:"I finished reading the book"},{q:"다음을 배열하세요.",blocks:["She","stopped","crying"],ans:"She stopped crying"},{q:"다음을 배열하세요.",blocks:["He","wants","to","play","the","guitar"],ans:"He wants to play the guitar"},{q:"다음을 배열하세요.",blocks:["I","plan","to","go","to","college"],ans:"I plan to go to college"}],
+  16:[{q:"다음을 배열하세요.",blocks:["I","am","so","tired","that","I","cannot","move"],ans:"I am so tired that I cannot move"},{q:"다음을 배열하세요.",blocks:["She","is","too","young","to","drive"],ans:"She is too young to drive"},{q:"다음을 배열하세요.",blocks:["He","is","old","enough","to","vote"],ans:"He is old enough to vote"},{q:"다음을 배열하세요.",blocks:["It","is","so","cold","that","we","stayed"],ans:"It is so cold that we stayed"},{q:"다음을 배열하세요.",blocks:["She","is","too","busy","to","talk"],ans:"She is too busy to talk"},{q:"다음을 배열하세요.",blocks:["He","is","strong","enough","to","lift","it"],ans:"He is strong enough to lift it"},{q:"다음을 배열하세요.",blocks:["I","am","so","happy","that","I","smile"],ans:"I am so happy that I smile"},{q:"다음을 배열하세요.",blocks:["The","box","is","too","heavy","to","carry"],ans:"The box is too heavy to carry"},{q:"다음을 배열하세요.",blocks:["She","is","smart","enough","to","solve","it"],ans:"She is smart enough to solve it"},{q:"다음을 배열하세요.",blocks:["It","is","so","hot","that","I","sweat"],ans:"It is so hot that I sweat"}],
+  17:[{q:"다음을 배열하세요.",blocks:["It","is","important","to","study"],ans:"It is important to study"},{q:"다음을 배열하세요.",blocks:["It","is","fun","to","play","games"],ans:"It is fun to play games"},{q:"다음을 배열하세요.",blocks:["It","takes","time","to","learn"],ans:"It takes time to learn"},{q:"다음을 배열하세요.",blocks:["It","seems","that","she","is","kind"],ans:"It seems that she is kind"},{q:"다음을 배열하세요.",blocks:["It","is","easy","to","make","friends"],ans:"It is easy to make friends"},{q:"다음을 배열하세요.",blocks:["It","is","hard","to","wake","up","early"],ans:"It is hard to wake up early"},{q:"다음을 배열하세요.",blocks:["It","is","nice","to","help","others"],ans:"It is nice to help others"},{q:"다음을 배열하세요.",blocks:["It","was","kind","of","her","to","help"],ans:"It was kind of her to help"},{q:"다음을 배열하세요.",blocks:["It","is","dangerous","to","run","there"],ans:"It is dangerous to run there"},{q:"다음을 배열하세요.",blocks:["It","takes","two","hours","to","get","there"],ans:"It takes two hours to get there"}],
+  18:[{q:"다음을 배열하세요.",blocks:["Not","only","she","but","also","he","came"],ans:"Not only she but also he came"},{q:"다음을 배열하세요.",blocks:["Either","tea","or","coffee","is","fine"],ans:"Either tea or coffee is fine"},{q:"다음을 배열하세요.",blocks:["Both","she","and","he","are","smart"],ans:"Both she and he are smart"},{q:"다음을 배열하세요.",blocks:["Neither","he","nor","she","came"],ans:"Neither he nor she came"},{q:"다음을 배열하세요.",blocks:["The","more","you","study","the","smarter"],ans:"The more you study the smarter"},{q:"다음을 배열하세요.",blocks:["She","is","not","only","kind","but","smart"],ans:"She is not only kind but smart"},{q:"다음을 배열하세요.",blocks:["Both","cats","and","dogs","are","cute"],ans:"Both cats and dogs are cute"},{q:"다음을 배열하세요.",blocks:["Either","you","or","I","am","wrong"],ans:"Either you or I am wrong"},{q:"다음을 배열하세요.",blocks:["Neither","cold","nor","hot","is","good"],ans:"Neither cold nor hot is good"},{q:"다음을 배열하세요.",blocks:["The","harder","you","try","the","better"],ans:"The harder you try the better"}],
+  19:[{q:"다음을 배열하세요.",blocks:["I","told","her","that","I","liked","it"],ans:"I told her that I liked it"},{q:"다음을 배열하세요.",blocks:["She","said","that","she","was","happy"],ans:"She said that she was happy"},{q:"다음을 배열하세요.",blocks:["He","asked","me","where","I","lived"],ans:"He asked me where I lived"},{q:"다음을 배열하세요.",blocks:["I","know","that","she","is","kind"],ans:"I know that she is kind"},{q:"다음을 배열하세요.",blocks:["She","believes","that","he","will","come"],ans:"She believes that he will come"},{q:"다음을 배열하세요.",blocks:["He","asked","if","I","liked","music"],ans:"He asked if I liked music"},{q:"다음을 배열하세요.",blocks:["I","think","that","cats","are","cute"],ans:"I think that cats are cute"},{q:"다음을 배열하세요.",blocks:["She","wondered","why","he","left"],ans:"She wondered why he left"},{q:"다음을 배열하세요.",blocks:["I","hope","that","you","will","succeed"],ans:"I hope that you will succeed"},{q:"다음을 배열하세요.",blocks:["He","said","he","would","come","back"],ans:"He said he would come back"}],
+  20:[{q:"다음을 배열하세요.",blocks:["Despite","being","tired","she","studied"],ans:"Despite being tired she studied"},{q:"다음을 배열하세요.",blocks:["Having","finished","dinner","he","rested"],ans:"Having finished dinner he rested"},{q:"다음을 배열하세요.",blocks:["Walking","to","school","I","met","her"],ans:"Walking to school I met her"},{q:"다음을 배열하세요.",blocks:["Given","the","chance","I","would","travel"],ans:"Given the chance I would travel"},{q:"다음을 배열하세요.",blocks:["Feeling","sick","she","went","home"],ans:"Feeling sick she went home"},{q:"다음을 배열하세요.",blocks:["Considering","all","he","did","well"],ans:"Considering all he did well"},{q:"다음을 배열하세요.",blocks:["Seen","from","here","it","looks","small"],ans:"Seen from here it looks small"},{q:"다음을 배열하세요.",blocks:["Being","smart","she","solved","it","fast"],ans:"Being smart she solved it fast"},{q:"다음을 배열하세요.",blocks:["Not","knowing","the","way","I","asked"],ans:"Not knowing the way I asked"},{q:"다음을 배열하세요.",blocks:["Tired","of","waiting","he","left"],ans:"Tired of waiting he left"}],
+};
+
+// ══════════════════════════════════════════════════════════
+// 듣기 퀴즈 (listeningBank) — TTS 활용 — 20레벨 각 10문제
+// ══════════════════════════════════════════════════════════
+quizBank.listening = {
+  1:[
+    {q:"들려주는 단어의 뜻을 고르세요.",speak:"cat",a:["강아지","고양이","새","물고기"],c:1},
+    {q:"들려주는 단어의 뜻을 고르세요.",speak:"dog",a:["강아지","고양이","새","물고기"],c:0},
+    {q:"들려주는 단어의 뜻을 고르세요.",speak:"apple",a:["바나나","오렌지","사과","포도"],c:2},
+    {q:"들려주는 단어의 뜻을 고르세요.",speak:"red",a:["파란색","빨간색","초록색","노란색"],c:1},
+    {q:"들려주는 단어의 뜻을 고르세요.",speak:"book",a:["가방","연필","책","의자"],c:2},
+    {q:"들려주는 단어의 뜻을 고르세요.",speak:"happy",a:["슬픈","화난","행복한","무서운"],c:2},
+    {q:"들려주는 단어의 뜻을 고르세요.",speak:"run",a:["먹다","달리다","자다","놀다"],c:1},
+    {q:"들려주는 단어의 뜻을 고르세요.",speak:"big",a:["작은","빠른","큰","느린"],c:2},
+    {q:"들려주는 단어의 뜻을 고르세요.",speak:"sun",a:["달","별","구름","태양"],c:3},
+    {q:"들려주는 단어의 뜻을 고르세요.",speak:"water",a:["우유","주스","물","차"],c:2},
+  ],
+  2:[
+    {q:"들려주는 문장의 뜻을 고르세요.",speak:"I am a student.",a:["나는 선생님이다.","나는 학생이다.","나는 의사이다.","나는 요리사이다."],c:1},
+    {q:"들려주는 문장의 뜻을 고르세요.",speak:"She is my friend.",a:["그녀는 내 선생님이다.","그녀는 내 엄마이다.","그녀는 내 친구이다.","그녀는 내 언니이다."],c:2},
+    {q:"들려주는 문장의 뜻을 고르세요.",speak:"I like cats.",a:["나는 개를 좋아한다.","나는 새를 좋아한다.","나는 고양이를 좋아한다.","나는 토끼를 좋아한다."],c:2},
+    {q:"들려주는 문장의 뜻을 고르세요.",speak:"He is tall.",a:["그는 키가 작다.","그는 뚱뚱하다.","그는 날씬하다.","그는 키가 크다."],c:3},
+    {q:"들려주는 문장의 뜻을 고르세요.",speak:"I have a book.",a:["나는 가방이 있다.","나는 책이 있다.","나는 연필이 있다.","나는 지우개가 있다."],c:1},
+    {q:"들려주는 문장의 뜻을 고르세요.",speak:"She drinks milk.",a:["그녀는 주스를 마신다.","그녀는 물을 마신다.","그녀는 우유를 마신다.","그녀는 차를 마신다."],c:2},
+    {q:"들려주는 문장의 뜻을 고르세요.",speak:"He plays soccer.",a:["그는 야구를 한다.","그는 농구를 한다.","그는 테니스를 친다.","그는 축구를 한다."],c:3},
+    {q:"들려주는 문장의 뜻을 고르세요.",speak:"We are happy.",a:["우리는 슬프다.","우리는 화났다.","우리는 행복하다.","우리는 배고프다."],c:2},
+    {q:"들려주는 문장의 뜻을 고르세요.",speak:"I go to school.",a:["나는 공원에 간다.","나는 집에 간다.","나는 학교에 간다.","나는 병원에 간다."],c:2},
+    {q:"들려주는 문장의 뜻을 고르세요.",speak:"She eats an apple.",a:["그녀는 바나나를 먹는다.","그녀는 사과를 먹는다.","그녀는 오렌지를 먹는다.","그녀는 포도를 먹는다."],c:1},
+  ],
+  3:[{q:"들려주는 문장의 뜻을 고르세요.",speak:"Do you like dogs?",a:["너는 고양이를 좋아하니?","너는 개를 좋아하니?","너는 새를 좋아하니?","너는 토끼를 좋아하니?"],c:1},{q:"들려주는 문장을 고르세요.",speak:"She is running fast.",a:["그녀는 빠르게 걷고 있다.","그녀는 빠르게 수영하고 있다.","그녀는 빠르게 달리고 있다.","그녀는 빠르게 날고 있다."],c:2},{q:"들려주는 문장의 뜻을 고르세요.",speak:"He doesn't like fish.",a:["그는 생선을 좋아한다.","그는 고기를 좋아하지 않는다.","그는 생선을 좋아하지 않는다.","그는 채소를 좋아하지 않는다."],c:2},{q:"들려주는 문장의 뜻을 고르세요.",speak:"Where is the cat?",a:["고양이가 어디 있니?","고양이가 몇 마리야?","고양이가 뭘 먹어?","고양이가 언제 왔어?"],c:0},{q:"들려주는 문장의 뜻을 고르세요.",speak:"I played soccer yesterday.",a:["나는 오늘 축구를 한다.","나는 어제 축구를 했다.","나는 내일 축구를 할 것이다.","나는 지금 축구를 하고 있다."],c:1},{q:"들려주는 문장의 뜻을 고르세요.",speak:"She will come tomorrow.",a:["그녀는 오늘 온다.","그녀는 어제 왔다.","그녀는 지금 오고 있다.","그녀는 내일 올 것이다."],c:3},{q:"들려주는 문장의 뜻을 고르세요.",speak:"Can you swim?",a:["너는 수영하고 있니?","너는 수영할 수 있니?","너는 수영을 좋아하니?","너는 수영을 해야 하니?"],c:1},{q:"들려주는 문장의 뜻을 고르세요.",speak:"It is cold today.",a:["오늘은 덥다.","오늘은 따뜻하다.","오늘은 춥다.","오늘은 시원하다."],c:2},{q:"들려주는 문장의 뜻을 고르세요.",speak:"What time is it?",a:["몇 살이야?","몇 시야?","어디야?","누구야?"],c:1},{q:"들려주는 문장의 뜻을 고르세요.",speak:"I am so hungry.",a:["나는 매우 피곤하다.","나는 매우 졸리다.","나는 매우 배고프다.","나는 매우 행복하다."],c:2}],
+  4:[{q:"들려주는 문장의 뜻을 고르세요.",speak:"She is taller than me.",a:["그녀는 나보다 작다.","그녀는 나보다 크다.","나는 그녀보다 크다.","우리는 같은 키다."],c:1},{q:"들려주는 문장의 뜻을 고르세요.",speak:"He went to the market.",a:["그는 공원에 갔다.","그는 학교에 갔다.","그는 시장에 갔다.","그는 병원에 갔다."],c:2},{q:"들려주는 문장의 뜻을 고르세요.",speak:"I have never seen a panda.",a:["나는 판다를 본 적이 있다.","나는 판다를 본 적이 없다.","나는 판다를 좋아한다.","나는 판다를 싫어한다."],c:1},{q:"들려주는 문장의 뜻을 고르세요.",speak:"If it rains, I will stay home.",a:["비가 오면 나는 나갈 것이다.","비가 오면 나는 집에 있을 것이다.","비가 오지 않으면 나는 집에 있을 것이다.","비가 오지 않으면 나는 나갈 것이다."],c:1},{q:"들려주는 문장의 뜻을 고르세요.",speak:"The cake was made by her.",a:["그녀는 케이크를 먹었다.","그녀는 케이크를 샀다.","케이크는 그녀에 의해 만들어졌다.","케이크는 그녀에게 주어졌다."],c:2},{q:"들려주는 문장의 뜻을 고르세요.",speak:"I should study harder.",a:["나는 더 열심히 공부할 수 있다.","나는 더 열심히 공부했다.","나는 더 열심히 공부할 것이다.","나는 더 열심히 공부해야 한다."],c:3},{q:"들려주는 문장의 뜻을 고르세요.",speak:"Who is that girl?",a:["저 소녀는 어디에 있니?","저 소녀는 누구니?","저 소녀는 무엇을 하니?","저 소녀는 왜 거기 있니?"],c:1},{q:"들려주는 문장의 뜻을 고르세요.",speak:"She is the most beautiful.",a:["그녀는 아름답다.","그녀는 더 아름답다.","그녀는 가장 아름답다.","그녀는 별로 아름답지 않다."],c:2},{q:"들려주는 문장의 뜻을 고르세요.",speak:"I want to be a doctor.",a:["나는 의사가 되고 싶다.","나는 선생님이 되고 싶다.","나는 요리사가 되고 싶다.","나는 가수가 되고 싶다."],c:0},{q:"들려주는 문장의 뜻을 고르세요.",speak:"He asked me where I lived.",a:["그는 내가 어디 사는지 말했다.","그는 내가 어디 사는지 물어봤다.","그는 내가 어디 사는지 알고 있다.","그는 내가 어디 사는지 모른다."],c:1}],
+};
+// 5~20레벨도 동일 패턴으로 채우기
+for(let lv=5; lv<=20; lv++){
+  if(!quizBank.listening[lv]){
+    quizBank.listening[lv]=quizBank.listening[Math.min(4,lv-1)].map((q,i)=>({...q}));
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// 던전 퀴즈 (dungeonBank) — 20층 각 10문제
+// ══════════════════════════════════════════════════════════
+quizBank.dungeon = {
+  1:[
+    {q:"'cat'의 뜻은?",a:["강아지","고양이","새","물고기"],c:1},
+    {q:"'dog'의 뜻은?",a:["강아지","고양이","새","물고기"],c:0},
+    {q:"'apple'의 뜻은?",a:["바나나","오렌지","사과","포도"],c:2},
+    {q:"'I ___ a student.' 빈칸은?",a:["am","is","are","be"],c:0},
+    {q:"'red'의 뜻은?",a:["파란색","빨간색","초록색","노란색"],c:1},
+    {q:"'big'의 반대말은?",a:["tall","short","small","fast"],c:2},
+    {q:"'happy'의 뜻은?",a:["슬픈","화난","행복한","무서운"],c:2},
+    {q:"'run'의 뜻은?",a:["먹다","달리다","자다","놀다"],c:1},
+    {q:"'book'의 뜻은?",a:["가방","연필","책","의자"],c:2},
+    {q:"'She ___ my friend.' 빈칸은?",a:["am","is","are","be"],c:1},
+  ],
+  2:[
+    {q:"'banana'의 뜻은?",a:["사과","바나나","오렌지","포도"],c:1},
+    {q:"'school'의 뜻은?",a:["집","공원","학교","병원"],c:2},
+    {q:"'I have ___ apple.'에서 빈칸은?",a:["a","an","the","없음"],c:1},
+    {q:"'cats'는 무엇의 복수형?",a:["cat","cats","catty","catch"],c:0},
+    {q:"'eat'의 -ing형은?",a:["eatting","eating","eateing","eats"],c:1},
+    {q:"'She ___ milk.'에서 빈칸은?",a:["drink","drinks","drank","drinking"],c:1},
+    {q:"'fast'의 뜻은?",a:["느린","빠른","크다","작다"],c:1},
+    {q:"'sun'의 뜻은?",a:["달","별","구름","태양"],c:3},
+    {q:"'mother'의 뜻은?",a:["아버지","어머니","언니","남동생"],c:1},
+    {q:"'play'의 과거형은?",a:["plaied","played","playes","playing"],c:1},
+  ],
+  3:[
+    {q:"'jump'의 뜻은?",a:["먹다","달리다","점프하다","자다"],c:2},
+    {q:"'Do you like cats?' 긍정 답변은?",a:["Yes, I do.","Yes, I am.","Yes, I does.","Yes, I like."],c:0},
+    {q:"'go'의 과거형은?",a:["goed","goes","went","going"],c:2},
+    {q:"'tooth'의 복수형은?",a:["tooths","toothes","teeth","tooth"],c:2},
+    {q:"'She is running ___.' 뜻이 맞는 것은?",a:["그녀는 달렸다.","그녀는 달리고 있다.","그녀는 달릴 것이다.","그녀는 달린다."],c:1},
+    {q:"'cold'의 반대말은?",a:["hot","cool","warm","big"],c:0},
+    {q:"'family'의 뜻은?",a:["친구","가족","선생님","학생"],c:1},
+    {q:"'She ___ not tall.' 빈칸은?",a:["am","is","are","do"],c:1},
+    {q:"'book'의 복수형은?",a:["books","bookes","bookies","book"],c:0},
+    {q:"'swim'의 -ing형은?",a:["swiming","swimming","swimeing","swims"],c:1},
+  ],
+  4:[
+    {q:"'Can she dance?' 긍정 답변은?",a:["Yes, she can.","Yes, she do.","Yes, she is.","Yes, she will."],c:0},
+    {q:"'eat'의 과거형은?",a:["eated","eats","ate","eating"],c:2},
+    {q:"'I will go.' 부정문은?",a:["I won't go.","I willn't go.","I don't will go.","I not will go."],c:0},
+    {q:"'flower'의 뜻은?",a:["나무","풀","꽃","강"],c:2},
+    {q:"비교급을 만들 때 짧은 단어에는?",a:["-est 붙임","-er 붙임","more 붙임","most 붙임"],c:1},
+    {q:"'beautiful'의 비교급은?",a:["beautifuler","more beautiful","most beautiful","beautifulest"],c:1},
+    {q:"'see'의 과거형은?",a:["seed","sees","saw","seeing"],c:2},
+    {q:"'must'의 뜻은?",a:["~할 수 있다","~할 것이다","~해야 한다","~했다"],c:2},
+    {q:"'where'는 무엇을 묻나요?",a:["시간","장소","사람","이유"],c:1},
+    {q:"'I like cats ___ dogs.' (그리고) 빈칸은?",a:["but","so","and","or"],c:2},
+  ],
+  5:[
+    {q:"'tall'의 최상급은?",a:["taller","tallest","more tall","most tall"],c:1},
+    {q:"'She has ___ her homework.' 빈칸은?",a:["do","did","done","doing"],c:2},
+    {q:"'have'의 과거형은?",a:["haved","has","had","having"],c:2},
+    {q:"'The book is ___ the desk.' (위에) 빈칸은?",a:["in","on","under","behind"],c:1},
+    {q:"'because'의 뜻은?",a:["~할 때","~이기 때문에","~하기 위해","~하지만"],c:1},
+    {q:"'I should study ___.' 빈칸에 맞는 것은?",a:["hard","harder","hardest","hardly"],c:0},
+    {q:"'The cake was made ___ her.' 빈칸은?",a:["to","for","by","with"],c:2},
+    {q:"'who'는 어떤 경우에 쓰나요?",a:["사물","사람","장소","시간"],c:1},
+    {q:"'write'의 과거형은?",a:["writed","writes","wrote","writing"],c:2},
+    {q:"'If it rains, I ___ stay.' 빈칸은?",a:["will","would","can","should"],c:0},
+  ],
+  6:[{q:"'elephant'의 뜻은?",a:["사자","호랑이","코끼리","곰"],c:2},{q:"'make'의 과거형은?",a:["maked","makes","made","making"],c:2},{q:"'good'의 비교급은?",a:["gooder","goodest","better","best"],c:2},{q:"'English is spoken everywhere.' — 이 문장의 형태는?",a:["능동태","수동태","현재진행형","현재완료"],c:1},{q:"'slow'의 부사형은?",a:["slowy","slowly","slower","slowest"],c:1},{q:"'I have never ___ skiing.' 빈칸은?",a:["go","went","gone","going"],c:2},{q:"'can' 다음에 오는 동사 형태는?",a:["과거형","동사원형","3인칭단수형","현재분사"],c:1},{q:"'when'은 무엇을 묻나요?",a:["장소","시간","사람","이유"],c:1},{q:"관사 'an'은 어떤 단어 앞에?",a:["자음 시작","모음 시작","항상","절대 안씀"],c:1},{q:"'study'의 과거형은?",a:["studyed","studied","studies","studying"],c:1}],
+  7:[{q:"'mountain'의 뜻은?",a:["강","바다","산","호수"],c:2},{q:"'run'의 과거형은?",a:["runed","runs","ran","running"],c:2},{q:"'The boy ___ is tall is Tom.' 빈칸은?",a:["which","who","where","when"],c:1},{q:"수동태의 형태는?",a:["be+동사원형","be+과거분사","be+현재분사","be+과거형"],c:1},{q:"'will' 다음에 오는 동사 형태는?",a:["과거형","동사원형","3인칭단수형","현재진행형"],c:1},{q:"'I wish I ___ a bird.' 빈칸은?",a:["am","was","were","will be"],c:2},{q:"'although'의 뜻은?",a:["~이기 때문에","비록 ~이지만","만약","~할 때"],c:1},{q:"'drink'의 과거형은?",a:["drinked","drinks","drank","drinking"],c:2},{q:"'bad'의 비교급은?",a:["badder","baddest","worse","worst"],c:2},{q:"'give'의 과거형은?",a:["gived","gives","gave","giving"],c:2}],
+  8:[{q:"'butterfly'의 뜻은?",a:["개구리","나비","거북이","뱀"],c:1},{q:"'see'의 과거분사는?",a:["seed","saw","seen","seeing"],c:2},{q:"'Not only she ___ also he came.' 빈칸은?",a:["and","but","or","nor"],c:1},{q:"'I am so tired ___ I cannot move.' 빈칸은?",a:["and","but","that","or"],c:2},{q:"'She is too young ___ drive.' 빈칸은?",a:["and","to","for","but"],c:1},{q:"'The more you study, ___ smarter you get.' 빈칸은?",a:["a","an","the","some"],c:2},{q:"'Having finished dinner, he ___.' 알맞은 표현은?",a:["rested","was resting","is resting","will rest"],c:0},{q:"'I told her that I ___ it.' 빈칸은?",a:["like","liked","likes","liking"],c:1},{q:"'either A or B'의 뜻은?",a:["A와 B 둘 다","A 또는 B","A도 B도 아닌","A도 아니고 B도"],c:1},{q:"'write'의 과거분사는?",a:["writed","wrote","written","writing"],c:2}],
+  9:[{q:"'violin'의 뜻은?",a:["피아노","기타","바이올린","드럼"],c:2},{q:"'I enjoy ___.' 빈칸에 알맞은 형태는?",a:["swim","to swim","swimming","swam"],c:2},{q:"'She stopped ___.' 빈칸에 알맞은 형태는?",a:["cry","to cry","crying","cried"],c:2},{q:"'It is important ___ study.' 빈칸은?",a:["and","to","for","but"],c:1},{q:"'despite'의 뜻은?",a:["왜냐하면","~에도 불구하고","만약","~할 때"],c:1},{q:"'given the chance'의 뜻은?",a:["기회를 주지 않으면","기회가 주어진다면","기회가 없다면","기회를 준다면"],c:1},{q:"'He asked me ___ I lived.' 빈칸은?",a:["that","which","where","when"],c:2},{q:"'She believes ___ he will come.' 빈칸은?",a:["which","where","that","when"],c:2},{q:"'Neither he ___ she came.' 빈칸은?",a:["and","but","or","nor"],c:3},{q:"'I finished ___ the book.' 빈칸에 알맞은 형태는?",a:["read","to read","reading","readed"],c:2}],
+  10:[{q:"'physician'의 뜻은?",a:["교사","의사","경찰관","소방관"],c:1},{q:"'I am old enough ___ vote.' 빈칸은?",a:["and","to","for","but"],c:1},{q:"관계부사 'where'는 어떤 경우?",a:["사물","사람","장소","시간"],c:2},{q:"'It seems ___ she is kind.' 빈칸은?",a:["which","where","that","when"],c:2},{q:"'as if'의 뜻은?",a:["만약","마치 ~인 것처럼","~이기 때문에","~할 때"],c:1},{q:"'seen from here'의 뜻은?",a:["여기에서 보면","여기에서 봤다","여기에서 볼 것이다","여기에서 보고 있다"],c:0},{q:"가정법 과거에서 be동사는?",a:["am/is/are","was/were","were (모든 주어)","be"],c:2},{q:"'The day ___ we met was special.' 빈칸은?",a:["who","which","where","when"],c:3},{q:"'Both cats ___ dogs are cute.' 빈칸은?",a:["or","but","and","nor"],c:2},{q:"'I plan ___ go to college.' 빈칸은?",a:["and","to","for","but"],c:1}],
+};
+// 11~20층은 이전 층 문제를 재활용 + 난이도 증가 표시
+for(let lv=11; lv<=20; lv++){
+  quizBank.dungeon[lv]=[];
+  for(let q=0;q<10;q++){
+    const src=quizBank.dungeon[lv-10][q];
+    quizBank.dungeon[lv].push({...src, q:`[${lv}층] `+src.q});
+  }
+}
+
+console.log("✅ 게임 데이터 로드 완료! 단어:", wordPool.length, "개");
+
+</script>
+
+<div id="game-container">
+
+  <!-- 로딩 -->
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <div id="loading-msg">처리 중...</div>
+  </div>
+
+  <!-- HUD -->
+  <div id="points-ui">포인트: <span id="user-points-display">0</span> P</div>
+  <div id="xp-ui">
+    <span id="xp-level-label">Lv.1</span> &nbsp;|&nbsp;
+    XP <span id="xp-current">0</span>/<span id="xp-required">100</span>
+    <div id="xp-bar-outer"><div id="xp-bar-inner" style="width:0%"></div></div>
+  </div>
+  <div id="group-badge">그룹: <span id="group-badge-code">—</span></div>
+  <div id="inventory-ui">
+    <div class="inv-title">🎒 인벤토리</div>
+    <ul id="inv-list" class="inv-list"><li>비어있음</li></ul>
+  </div>
+  <div id="player">
+    <div class="character-avatar" id="char-avatar">
+      <div class="char-head"></div><div class="char-scarf"></div><div class="char-body"></div>
+    </div>
+    <div class="player-name-tag" id="p-name-tag">용사</div>
+  </div>
+  <div id="levelup-toast">🎉 레벨 업!<br><span id="levelup-num" style="font-size:46px;"></span></div>
+
+  <!-- ════ 인증 ════ -->
+  <div id="auth-screen" class="screen" style="display:flex;">
+    <div class="auth-title">⚔ 영어 원정대 RPG ⚔</div>
+    <div class="auth-box">
+      <div class="menu-tabs">
+        <button id="tab-login"    class="tab-btn active" onclick="switchAuthMode('login')">로그인</button>
+        <button id="tab-register" class="tab-btn"        onclick="switchAuthMode('register')">회원가입</button>
+      </div>
+      <h3 id="form-title">모험가 로그인</h3>
+      <input type="text"     id="auth-id"   placeholder="아이디를 입력하세요">
+      <input type="password" id="auth-pw"   placeholder="비밀번호를 입력하세요">
+      <input type="text"     id="auth-name" placeholder="캐릭터 이름" style="display:none;">
+      <button class="submit-btn" id="auth-submit-btn" onclick="handleAuthSubmit()">마을로 입장하기</button>
+    </div>
+  </div>
+
+  <!-- ════ 마을 ════ -->
+  <div id="town-screen" class="screen">
+    <button class="logout-btn" onclick="logout()">로그아웃</button>
+    <div class="banner">⛺ <span class="p-user-name">영웅</span>의 중세 마을</div>
+    <div id="portal-to-training" class="portal"><div class="portal-label">⚔ 훈련장 (↑)</div></div>
+    <div id="portal-merchant"    class="portal"><div class="portal-label">💰 상인 (↑)</div></div>
+    <div id="portal-dungeon"     class="portal"><div class="portal-label">🐉 던전 (↑)</div></div>
+    <div id="portal-myroom"      class="portal"><div class="portal-label">🏠 마이룸 (↑)</div></div>
+    <div id="portal-group"       class="portal"><div class="portal-label">👥 그룹 (↑)</div></div>
+    <div class="controls-guide">🕹️ 이동 [ <strong>◀ ▶</strong> ] / 포탈 진입 [ <strong>▲</strong> ]</div>
+  </div>
+
+  <!-- ════ 상점 ════ -->
+  <div id="merchant-screen" class="screen">
+    <div class="merchant-left"><h2>"원하는 게 무엇인가,<br>용사여?<br>오늘은 전부 무료라네!"</h2></div>
+    <div class="merchant-right" id="shop-grid"></div>
+    <button class="back-btn" onclick="changeMap('town-screen',300)">◀ 마을로</button>
+  </div>
+
+  <!-- ════ 훈련장 ════ -->
+  <div id="training-screen" class="screen">
+    <div class="banner">⚔ 기사 훈련소 광장</div>
+    <button class="back-btn" onclick="changeMap('town-screen',150)">◀ 마을로</button>
+    <div id="portal-word"      class="portal" data-category="word">     <div class="portal-label">📖 단어 (↑)</div></div>
+    <div id="portal-grammar"   class="portal" data-category="grammar">  <div class="portal-label">📋 문법 (↑)</div></div>
+    <div id="portal-writing"   class="portal" data-category="writing">  <div class="portal-label">✍ 작문 (↑)</div></div>
+    <div id="portal-listening" class="portal" data-category="listening"><div class="portal-label">🎧 듣기 (↑)</div></div>
+  </div>
+
+  <!-- ════ 레벨 선택 ════ -->
+  <div id="level-select-screen" class="screen">
+    <div class="banner">🏆 <span id="selected-category-title">단어</span> 훈련 - 레벨 선택</div>
+    <button class="back-btn" onclick="changeMap('training-screen',300)">◀ 훈련소로</button>
+    <div class="level-container" id="level-grid"></div>
+  </div>
+
+  <!-- ════ 퀴즈 ════ -->
+  <div id="quiz-screen" class="screen">
+    <div class="banner" id="quiz-banner-title">훈련</div>
+    <div class="quiz-box">
+      <div class="quiz-progress" id="quiz-idx">문제 1 / 5</div>
+      <div class="quiz-question" id="quiz-q-text"></div>
+      <div id="quiz-interactive-area"></div>
+    </div>
+    <button class="back-btn" onclick="exitQuiz()">🚪 포기하기</button>
+  </div>
+
+  <!-- ════ 던전 선택 ════ -->
+  <div id="dungeon-select-screen" class="screen">
+    <div class="banner">🐉 죽음의 드래곤 던전</div>
+    <button class="back-btn" onclick="changeMap('town-screen',300)">◀ 마을로</button>
+    <div class="level-container" id="dungeon-level-grid"></div>
+  </div>
+
+  <!-- ════ 던전 전투 ════ -->
+  <div id="dungeon-battle-screen" class="screen">
+    <div class="banner" id="dungeon-battle-title">던전 전투</div>
+    <div class="battle-arena">
+      <div class="fighter">
+        <div class="hp-bar" id="battle-player-hp">❤ ❤ ❤</div>
+        <div id="battle-player-vis" style="font-size:5.5rem;filter:drop-shadow(0px 4px 0px #000);">⚔️</div>
+        <div class="player-name-tag" style="margin-top:5px;">🛡️ 용사</div>
+      </div>
+      <div style="font-size:50px;color:yellow;text-shadow:3px 3px 0 black;font-family:'Jua',sans-serif;">VS</div>
+      <div class="fighter">
+        <div class="hp-bar" id="battle-monster-hp">❤ ❤ ❤</div>
+        <div id="battle-monster-vis" style="font-size:5.5rem;filter:drop-shadow(0px 4px 0px #000);display:inline-block;transition:transform .2s;">🐉</div>
+        <div class="player-name-tag" id="monster-name" style="margin-top:5px;border-color:#a12d2d;">몬스터</div>
+      </div>
+    </div>
+    <div class="quiz-box" style="position:relative;top:auto;left:auto;transform:none;width:800px;height:185px;margin-top:15px;padding:15px 30px;">
+      <div class="quiz-question" id="battle-q-text" style="font-size:19px;margin-bottom:10px;border-bottom:2px double #5c3a21;padding-bottom:5px;"></div>
+      <div id="battle-options-area" style="display:flex;gap:10px;flex-direction:row;justify-content:center;width:100%;"></div>
+    </div>
+    <button class="flee-btn" onclick="fleeFromDungeon()">🏃 도망치기</button>
+  </div>
+
+  <!-- ════ 마이룸 ════ -->
+  <div id="myroom-screen" class="screen">
+    <div class="banner">🏠 <span class="p-user-name">나</span>의 마이룸</div>
+    <div class="myroom-container" id="myroom-grid"></div>
+    <div style="position:absolute;bottom:20px;right:20px;display:flex;gap:8px;">
+      <button class="back-btn" style="position:relative;bottom:auto;left:auto;" onclick="changeMap('town-screen',645)">◀ 마을로</button>
+      <button class="green-btn" onclick="openRoomShop()">🛒 아이템 상점</button>
+    </div>
+  </div>
+
+  <!-- ════ 마이룸 아이템 상점 ════ -->
+  <div id="room-shop-screen" class="screen">
+    <div class="banner">🛒 아이템 상점 &nbsp;<span id="shop-my-points" style="font-size:15px;color:#fffbdf;"></span></div>
+    <div class="room-shop-grid" id="room-shop-grid"></div>
+    <button class="back-btn" onclick="openMyRoom()">◀ 마이룸으로</button>
+  </div>
+
+  <!-- ════ 그룹 ════ -->
+  <div id="group-screen" class="screen" style="gap:16px;">
+    <div class="banner">👥 그룹 &amp; 랭킹</div>
+
+    <div id="group-no-group" class="group-panel" style="width:740px;">
+      <h3>그룹에 참여하거나 새로 만들어 보세요!</h3>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+        <input id="group-code-input" class="group-input" maxlength="6" placeholder="코드 6자리" style="text-transform:uppercase;width:160px;">
+        <button class="rpg-btn" onclick="doJoinGroup()">참여하기</button>
+        <button class="rpg-btn" style="background:linear-gradient(to bottom,#8e44ad,#6c3483);" onclick="toggleCreateGroup()">그룹 만들기</button>
+      </div>
+      <div id="group-create-area" style="display:none;gap:10px;align-items:center;">
+        <input id="group-name-input" class="group-input" placeholder="그룹 이름" style="width:200px;">
+        <button class="rpg-btn" onclick="doCreateGroup()">만들기</button>
+      </div>
+    </div>
+
+    <div id="group-has-group" style="display:none;width:800px;">
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;justify-content:center;flex-wrap:wrap;">
+        <div style="background:rgba(0,0,0,.6);border:3px solid #3498db;padding:10px 22px;border-radius:8px;font-size:18px;color:#3498db;">
+          <span id="group-name-display">—</span> &nbsp;|&nbsp; 코드:
+          <strong id="group-code-display" style="color:#f1c40f;letter-spacing:3px;">—</strong>
+        </div>
+        <button class="rpg-btn" onclick="copyGroupCode()" style="background:linear-gradient(to bottom,#27ae60,#1e7e43);">📋 코드 복사</button>
+        <button class="rpg-btn" onclick="doLeaveGroup()" style="background:linear-gradient(to bottom,#c0392b,#922b21);">탈퇴</button>
+      </div>
+      <div class="group-panel" style="width:100%;">
+        <h3>🏆 이번 주 랭킹 <span style="font-size:12px;color:#7f8c8d;font-weight:normal;">매주 월요일 초기화 | 상위 3명 👑🥈🥉 자동 지급</span></h3>
+        <table class="ranking-table">
+          <thead><tr><th>순위</th><th>닉네임</th><th>레벨</th><th>총 XP</th><th>보상</th></tr></thead>
+          <tbody id="ranking-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <button class="back-btn" onclick="changeMap('town-screen',835)">◀ 마을로</button>
+  </div>
+
+</div><!-- #game-container -->
+
+<script>
+// ══════════════════════════════════════════════════════════
+// Firebase 초기화 (compat SDK — import 불필요)
+// ══════════════════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey:            "AIzaSyBo1KtM2kTV0Vzo02gbt1pO0R_l4FO5_Q8",
+  authDomain:        "english-rpg-game-5478e.firebaseapp.com",
+  projectId:         "english-rpg-game-5478e",
+  storageBucket:     "english-rpg-game-5478e.firebasestorage.app",
+  messagingSenderId: "419282044565",
+  appId:             "1:419282044565:web:cb7aac385519cbc979fd9c",
+  measurementId:     "G-314HEG3L5V"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// ── 외부 데이터 안전 초기화 ──
+if (typeof quizBank === 'undefined')
+  window.quizBank = { word:{}, grammar:{}, writing:{}, listening:{}, dungeon:{} };
+
+// ══════════════════════════════════════════════════════════
+// 레벨 & XP
+// ══════════════════════════════════════════════════════════
+function xpForLevel(lv){ return Math.floor(100*lv*(lv+1)/2); }
+function calcLevel(xp){ let lv=1; while(xp>=xpForLevel(lv)) lv++; return lv-1; }
+function xpProgress(xp){
+  const lv=calcLevel(xp), prev=xpForLevel(lv-1)||0, next=xpForLevel(lv);
+  return {level:lv, current:xp-prev, required:next-prev};
+}
+const XP = {
+  correct: 5,
+  clear:   30,
+  dungeon: (f)=>Math.floor(50+f*15),
+  replay:  (f)=>Math.floor(10+f*3),
+};
+
+// ══════════════════════════════════════════════════════════
+// Firestore 헬퍼
+// ══════════════════════════════════════════════════════════
+const uRef = (id)   => db.collection('users').doc(id);
+const gRef = (code) => db.collection('groups').doc(code);
+
+async function getUser(id){
+  const s = await uRef(id).get();
+  return s.exists ? s.data() : null;
+}
+async function mergeUser(id, data){
+  await uRef(id).set(data, {merge:true});
+}
+async function addXP(userId, amount){
+  const u   = await getUser(userId);
+  const before = u?.totalXp || 0;
+  const lvB    = calcLevel(before);
+  const after  = before + amount;
+  const lvA    = calcLevel(after);
+  await mergeUser(userId, {totalXp:after, level:lvA});
+  return lvA > lvB ? lvA : null;
+}
+
+// ══════════════════════════════════════════════════════════
+// 전역 상태
+// ══════════════════════════════════════════════════════════
+let currentUser     = null;
+let currentUserData = null;
+let activeMap       = 'auth-screen';
+let playerX         = 490;
+const speed         = 7;
+const keys          = {};
+let currentCategory    = '';
+let currentLevel       = 1;
+let quizIndex          = 0;
+let quizData           = [];
+let compositionUserAns = [];
+let playerHp=3, monsterHp=3, isDungeonReplay=false;
+let _rankUnsub = null;
+
+const monsterList = [
+  '🌊 슬라임','👺 고블린','🪨 오크','🦅 가고일','💀 스켈레톤',
+  '🧟 좀비','🧙 리치','🗿 골렘','🌿 와이번','🔥 레드 드래곤',
+  '🧝 다크 엘프','🐂 미노타우르스','🔱 키메라','🐍 바실리스크','🦁 그리핀',
+  '🧛 뱀파이어','🦁 스핑크스','🐘 베히모스','🦑 크라켄','🐲 블랙 드래곤',
+];
+const SHOP_ITEMS = [
+  {name:'🍎 사과',      desc:'체력 즉시 1 회복'},
+  {name:'📖 비전서',    desc:'던전 문제 스킵 + 피해'},
+  {name:'⚔️ 용사의 검', desc:'던전 공격력 +1'},
+];
+let localInventory = [];
+
+const ROOM_ITEMS = [
+  {id:'room_table',   name:'🪑 나무 책상',   emoji:'🪑', price:100},
+  {id:'room_plant',   name:'🌿 화분',        emoji:'🌿', price:60},
+  {id:'room_lamp',    name:'🪔 마법 등불',   emoji:'🪔', price:120},
+  {id:'room_shield',  name:'🛡️ 훈장 방패',  emoji:'🛡️', price:150},
+  {id:'room_chest',   name:'📦 보물 상자',   emoji:'📦', price:200},
+  {id:'room_trophy',  name:'🏆 우승 트로피', emoji:'🏆', price:300},
+  {id:'room_crystal', name:'🔮 수정 구슬',   emoji:'🔮', price:250},
+  {id:'room_book',    name:'📚 마법 서가',   emoji:'📚', price:180},
+  {id:'room_rug',     name:'🪄 마법 양탄자', emoji:'🪄', price:220},
+  {id:'room_pet',     name:'🐉 미니 드래곤', emoji:'🐉', price:500},
+];
+const RANK_REWARDS = [
+  {id:'crown_gold',   name:'👑 황금 왕관', emoji:'👑', price:0, type:'room', rankReward:true},
+  {id:'crown_silver', name:'🥈 은빛 왕관', emoji:'🥈', price:0, type:'room', rankReward:true},
+  {id:'crown_bronze', name:'🥉 동빛 왕관', emoji:'🥉', price:0, type:'room', rankReward:true},
+];
+
+// ══════════════════════════════════════════════════════════
+// UI 헬퍼
+// ══════════════════════════════════════════════════════════
+function showLoading(msg='처리 중...'){
+  document.getElementById('loading-msg').innerText=msg;
+  document.getElementById('loading-overlay').style.display='flex';
+}
+function hideLoading(){ document.getElementById('loading-overlay').style.display='none'; }
+
+function refreshXpUI(totalXp){
+  const p=xpProgress(totalXp);
+  document.getElementById('xp-level-label').innerText=`Lv.${p.level}`;
+  document.getElementById('xp-current').innerText=p.current;
+  document.getElementById('xp-required').innerText=p.required;
+  document.getElementById('xp-bar-inner').style.width=Math.min(100,Math.floor(p.current/p.required*100))+'%';
+}
+function refreshPointsUI(pts){
+  document.getElementById('user-points-display').innerText=pts??0;
+}
+function refreshInvUI(){
+  const list=document.getElementById('inv-list');
+  list.innerHTML=localInventory.length===0?'<li>비어있음</li>':localInventory.map(i=>`<li>✅ ${i}</li>`).join('');
+}
+function showXpFloat(amount){
+  const el=document.createElement('div'); el.className='xp-float';
+  el.innerText=`+${amount} XP`; el.style.left='22px'; el.style.top='92px';
+  document.getElementById('game-container').appendChild(el);
+  setTimeout(()=>el.remove(),1300);
+}
+function showLevelUpToast(lv){
+  const t=document.getElementById('levelup-toast');
+  document.getElementById('levelup-num').innerText=`Lv.${lv}`;
+  t.style.display='block'; setTimeout(()=>t.style.display='none',2600);
+}
+async function giveXP(amount){
+  if(!currentUser) return;
+  showXpFloat(amount);
+  const newLv=await addXP(currentUser, amount);
+  currentUserData=await getUser(currentUser);
+  refreshXpUI(currentUserData.totalXp||0);
+  if(newLv) showLevelUpToast(newLv);
+}
+async function addPoints(amount){
+  const cur=currentUserData?.points||0;
+  const next=cur+amount;
+  await mergeUser(currentUser,{points:next});
+  currentUserData.points=next; refreshPointsUI(next);
+}
+async function spendPoints(amount){
+  const cur=currentUserData?.points||0;
+  if(cur<amount) return false;
+  const next=cur-amount;
+  await mergeUser(currentUser,{points:next});
+  currentUserData.points=next; refreshPointsUI(next); return true;
+}
+
+// ══════════════════════════════════════════════════════════
+// 지도 이동
+// ══════════════════════════════════════════════════════════
+function changeMap(screenId, spawnX){
+  document.querySelectorAll('.screen').forEach(s=>{s.style.display='none';s.style.backgroundImage='none';});
+  const t=document.getElementById(screenId); if(!t) return;
+  t.style.display='flex'; activeMap=screenId;
+  const bg={'auth-screen':"url('bg_auth.png')",'town-screen':"url('bg_town.png')",'training-screen':"url('bg_training_gateway.png')",'dungeon-select-screen':"url('bg_dungeon.png')",'dungeon-battle-screen':"url('bg_dungeon.png')"};
+  if(bg[screenId]) t.style.backgroundImage=bg[screenId];
+  const p=document.getElementById('player');
+  if(['town-screen','training-screen'].includes(screenId)){
+    p.style.display='flex'; playerX=spawnX; p.style.left=playerX+'px';
+  } else { p.style.display='none'; }
+}
+
+// ══════════════════════════════════════════════════════════
+// 물리 / 게임루프
+// ══════════════════════════════════════════════════════════
+let pVelY=0, isJump=false;
+const gravity=0.6, groundY=400;
+function physicsLoop(){
+  if(isJump){
+    let top=parseInt(document.getElementById('player').style.top)||groundY;
+    pVelY+=gravity; top+=pVelY;
+    if(top>=groundY){top=groundY;pVelY=0;isJump=false;}
+    document.getElementById('player').style.top=top+'px';
+  }
+  requestAnimationFrame(physicsLoop);
+}
+physicsLoop();
+window.addEventListener('keydown',e=>{
+  if(!['town-screen','training-screen'].includes(activeMap)) return;
+  keys[e.key]=true;
+  if(e.key==='ArrowUp'||e.key==='Up') checkPortal();
+});
+window.addEventListener('keyup',e=>{keys[e.key]=false;});
+function gameLoop(){
+  if(['town-screen','training-screen'].includes(activeMap)){
+    const p=document.getElementById('player'), av=document.getElementById('char-avatar');
+    let mv=false;
+    if(keys['ArrowLeft']||keys['Left']) {playerX-=speed;if(av)av.style.transform='scaleX(-1)';if(playerX<40)playerX=40;mv=true;}
+    if(keys['ArrowRight']||keys['Right']){playerX+=speed;if(av)av.style.transform='scaleX(1)'; if(playerX>940)playerX=940;mv=true;}
+    if(mv&&p) p.style.left=playerX+'px';
+  }
+  requestAnimationFrame(gameLoop);
+}
+gameLoop();
+
+function checkPortal(){
+  const pc=playerX+25;
+  if(activeMap==='town-screen'){
+    const portals=[
+      {id:'portal-to-training',fn:()=>{alert('⚔ 기사 훈련소로!');changeMap('training-screen',490);}},
+      {id:'portal-merchant',   fn:()=>{alert('💰 상점 입장!');renderShop();changeMap('merchant-screen',490);}},
+      {id:'portal-dungeon',    fn:()=>{alert('🐉 드래곤 던전!');openDungeonSelect();}},
+      {id:'portal-myroom',     fn:()=>openMyRoom()},
+      {id:'portal-group',      fn:()=>openGroupScreen()},
+    ];
+    for(const p of portals){
+      const el=document.getElementById(p.id);
+      if(el&&pc>=el.offsetLeft&&pc<=el.offsetLeft+el.offsetWidth){p.fn();break;}
+    }
+  } else if(activeMap==='training-screen'){
+    document.querySelectorAll('#training-screen .portal').forEach(p=>{
+      if(pc>=p.offsetLeft&&pc<=p.offsetLeft+p.offsetWidth) openLevelSelect(p.getAttribute('data-category'));
+    });
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// 인증
+// ══════════════════════════════════════════════════════════
+function switchAuthMode(mode){
+  ['login','register'].forEach(m=>document.getElementById('tab-'+m).classList.toggle('active',m===mode));
+  ['auth-id','auth-pw','auth-name'].forEach(id=>document.getElementById(id).value='');
+  if(mode==='login'){
+    document.getElementById('form-title').innerText='모험가 로그인';
+    document.getElementById('auth-name').style.display='none';
+    document.getElementById('auth-submit-btn').innerText='마을로 입장하기';
+  } else {
+    document.getElementById('form-title').innerText='새로운 모험가 등록';
+    document.getElementById('auth-name').style.display='block';
+    document.getElementById('auth-submit-btn').innerText='가입 완료하기';
+  }
+}
+
+async function handleAuthSubmit(){
+  const id=document.getElementById('auth-id').value.trim();
+  const pw=document.getElementById('auth-pw').value.trim();
+  const name=document.getElementById('auth-name').value.trim();
+  if(!id||!pw){alert('아이디와 비밀번호를 입력해주세요!');return;}
+  showLoading('Firebase 처리 중...');
+  try{
+    const userData=await getUser(id);
+    const isRegister=document.getElementById('tab-register').classList.contains('active');
+    if(isRegister){
+      if(!name){alert('캐릭터 이름을 입력해주세요!');return;}
+      if(userData){alert('이미 사용 중인 아이디입니다.');return;}
+      await db.collection('users').doc(id).set({
+        pw,name,totalXp:0,level:1,points:0,
+        progress:{word:1,grammar:1,writing:1,listening:1,dungeon:1},
+        inventory:[],roomLayout:[],groupCode:null,
+        createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      alert('가입 완료! 로그인해 주세요.');
+      switchAuthMode('login');
+    } else {
+      if(!userData||userData.pw!==pw){alert('아이디 또는 비밀번호가 틀렸습니다!');return;}
+      currentUser=id; currentUserData=userData;
+      document.querySelectorAll('.p-user-name').forEach(el=>el.innerText=userData.name);
+      document.getElementById('p-name-tag').innerText=userData.name;
+      ['points-ui','xp-ui','inventory-ui'].forEach(i=>document.getElementById(i).style.display='block');
+      refreshXpUI(userData.totalXp||0);
+      refreshPointsUI(userData.points||0);
+      refreshInvUI();
+      if(userData.groupCode){
+        document.getElementById('group-badge').style.display='block';
+        document.getElementById('group-badge-code').innerText=userData.groupCode;
+        checkWeeklyRewards(userData.groupCode);
+      }
+      document.getElementById('player').style.display='flex';
+      changeMap('town-screen',490);
+    }
+  } finally { hideLoading(); }
+}
+
+function logout(){
+  if(!confirm('로그아웃 하시겠습니까?')) return;
+  if(_rankUnsub){_rankUnsub();_rankUnsub=null;}
+  currentUser=currentUserData=null;
+  ['points-ui','xp-ui','inventory-ui','group-badge'].forEach(i=>document.getElementById(i).style.display='none');
+  document.getElementById('player').style.display='none';
+  changeMap('auth-screen',490);
+}
+
+// ══════════════════════════════════════════════════════════
+// 상점
+// ══════════════════════════════════════════════════════════
+function renderShop(){
+  const grid=document.getElementById('shop-grid'); grid.innerHTML='';
+  SHOP_ITEMS.forEach(item=>{
+    const d=document.createElement('div'); d.className='shop-item-card';
+    d.innerHTML=`<h3>${item.name}</h3><p>${item.desc}</p><button onclick="buyShopItem('${item.name}')">무료 구매</button>`;
+    grid.appendChild(d);
+  });
+}
+function buyShopItem(name){localInventory.push(name);refreshInvUI();alert(`[${name}] 획득!`);}
+
+// ══════════════════════════════════════════════════════════
+// 훈련 시스템
+// ══════════════════════════════════════════════════════════
+async function openLevelSelect(category){
+  currentCategory=category;
+  const T={word:'📖 단어',grammar:'📋 문법',writing:'✍ 작문',listening:'🎧 듣기'};
+  document.getElementById('selected-category-title').innerText=T[category];
+  const prog=currentUserData?.progress||{word:1,grammar:1,writing:1,listening:1,dungeon:1};
+  const max=prog[category]||1;
+  const grid=document.getElementById('level-grid'); grid.innerHTML='';
+  for(let i=1;i<=20;i++){
+    const card=document.createElement('div');
+    if(i<=max){
+      card.className='level-card';
+      card.innerHTML=`<div>레벨 ${i}</div><div class="status-text">▶ 도전하기</div>`;
+      card.onclick=((lv)=>()=>startQuiz(lv))(i);
+    } else {
+      card.className='level-card locked';
+      card.innerHTML=`<div>🔒 레벨 ${i}</div><div class="status-text" style="color:#7f8c8d;">잠김</div>`;
+    }
+    grid.appendChild(card);
+  }
+  changeMap('level-select-screen',490);
+}
+
+function genWordQuiz(){
+  let q=[];
+  while(q.length<10){
+    let opts=[];
+    while(opts.length<4){let r=wordPool[Math.floor(Math.random()*wordPool.length)];if(!opts.find(o=>o.word===r.word))opts.push(r);}
+    const ci=Math.floor(Math.random()*4);
+    q.push({q:`단어 '${opts[ci].word}'의 뜻은?`,a:opts.map(o=>o.meaning),c:ci});
+  }
+  return q;
+}
+
+async function startQuiz(level){
+  currentLevel=level; quizIndex=0;
+  if(currentCategory==='word'){
+    if(typeof wordPool==='undefined'){alert('단어 데이터 없음!');return;}
+    quizData=genWordQuiz();
+  } else {
+    const orig=window.quizBank[currentCategory]?.[level];
+    if(!orig){alert('해당 레벨 데이터 없음!');return;}
+    quizData=[...orig].sort(()=>Math.random()-.5);
+  }
+  const T={word:'단어',grammar:'문법',writing:'작문',listening:'듣기'};
+  document.getElementById('quiz-banner-title').innerText=`${T[currentCategory]} 훈련 Lv.${level}`;
+  renderQuestion(); changeMap('quiz-screen',490);
+}
+
+function renderQuestion(){
+  const q=quizData[quizIndex];
+  document.getElementById('quiz-idx').innerText=`문제 ${quizIndex+1} / 5`;
+  document.getElementById('quiz-q-text').innerText=q.q;
+  const area=document.getElementById('quiz-interactive-area'); area.innerHTML='';
+  if(currentCategory==='listening'){
+    const b=document.createElement('button'); b.className='audio-btn';
+    b.innerText='🔊 발음 듣기'; b.onclick=()=>speakTTS(q.speak);
+    area.appendChild(b); speakTTS(q.speak);
+  }
+  if(['word','grammar','listening'].includes(currentCategory)){
+    const div=document.createElement('div'); div.className='quiz-options';
+    q.a.forEach((ch,i)=>{
+      const b=document.createElement('button'); b.className='option-btn';
+      b.innerText=`${i+1}. ${ch}`;
+      b.onclick=async()=>{
+        if(i===q.c){
+          await giveXP(XP.correct); alert(`정답! +${XP.correct} XP`);
+          quizIndex++; quizIndex<5?renderQuestion():await clearTraining();
+        } else { alert('오답! 처음부터 다시.'); startQuiz(currentLevel); }
+      };
+      div.appendChild(b);
+    });
+    area.appendChild(div);
+  } else if(currentCategory==='writing'){
+    compositionUserAns=[];
+    const res=document.createElement('div'); res.className='scramble-container'; res.innerText='단어 조합'; area.appendChild(res);
+    const pool=document.createElement('div'); pool.className='scramble-container';
+    [...q.blocks].sort(()=>Math.random()-.5).forEach(w=>{
+      const blk=document.createElement('div'); blk.className='word-block'; blk.innerText=w;
+      blk.onclick=async function(){
+        if(compositionUserAns.includes(w)) return;
+        compositionUserAns.push(w); res.innerText=compositionUserAns.join(' '); this.style.opacity='.3';
+        if(compositionUserAns.length===q.blocks.length){
+          setTimeout(async()=>{
+            if(compositionUserAns.join(' ')===q.ans){
+              await giveXP(XP.correct); alert(`정답! +${XP.correct} XP`);
+              quizIndex++; quizIndex<5?renderQuestion():await clearTraining();
+            } else { alert('오답! 처음부터 다시.'); startQuiz(currentLevel); }
+          },300);
+        }
+      };
+      pool.appendChild(blk);
+    });
+    area.appendChild(pool);
+  }
+}
+
+async function clearTraining(){
+  await giveXP(XP.clear); alert(`🏅 훈련 성공! +${XP.clear} XP`);
+  const prog=currentUserData?.progress||{};
+  if(currentLevel===(prog[currentCategory]||1)&&currentLevel<20){
+    prog[currentCategory]=currentLevel+1;
+    await mergeUser(currentUser,{progress:prog});
+    currentUserData.progress=prog;
+  }
+  openLevelSelect(currentCategory);
+}
+
+function speakTTS(text){
+  if('speechSynthesis' in window){window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.lang='en-US';window.speechSynthesis.speak(u);}
+}
+function exitQuiz(){if(confirm('포기하시겠습니까?'))openLevelSelect(currentCategory);}
+
+// ══════════════════════════════════════════════════════════
+// 던전
+// ══════════════════════════════════════════════════════════
+function openDungeonSelect(){
+  const grid=document.getElementById('dungeon-level-grid'); grid.innerHTML='';
+  const max=currentUserData?.progress?.dungeon||1;
+  for(let i=1;i<=20;i++){
+    const card=document.createElement('div'), locked=i>max;
+    card.className='level-card'+(locked?' locked':'');
+    card.innerHTML=`<div>던전 ${i}층</div><div class="status-text">${locked?'🔒 잠김':i<max?'🔄 재도전':'▶ 입장하기'}</div>`;
+    card.onclick=()=>{if(locked)alert('잠겨있습니다.');else startDungeon(i,i<max);};
+    grid.appendChild(card);
+  }
+  changeMap('dungeon-select-screen',490);
+}
+
+function startDungeon(level,isReplay){
+  const mEl=document.getElementById('battle-monster-vis'), tEl=document.getElementById('dungeon-battle-title');
+  if(!mEl||!tEl){alert('UI 오류!');return;}
+  currentCategory='dungeon'; currentLevel=level; isDungeonReplay=isReplay;
+  playerHp=3; monsterHp=3; quizIndex=0;
+  const m=monsterList[level-1]||'👾 정체불명';
+  mEl.innerText=m.split(' ')[0]; tEl.innerText=`${m} 출현! (${level}층)`;
+  document.getElementById('monster-name').innerText=m;
+  mEl.style.transform=`scale(${1+level*0.05})`;
+  if(!window.quizBank.dungeon?.[level]){alert('던전 데이터 없음!');return;}
+  quizData=[...window.quizBank.dungeon[level]].sort(()=>Math.random()-.5).slice(0,5);
+  updateBattleUI(); renderDungeonQ(); changeMap('dungeon-battle-screen',490);
+}
+
+function renderDungeonQ(){
+  if(playerHp<=0||monsterHp<=0||quizIndex>=quizData.length) return;
+  const q=quizData[quizIndex];
+  document.getElementById('battle-q-text').innerText=q.q;
+  const area=document.getElementById('battle-options-area'); area.innerHTML='';
+  q.a.forEach((ch,i)=>{
+    const b=document.createElement('button'); b.className='battle-btn'; b.innerText=`${i+1}. ${ch}`;
+    b.onclick=()=>{
+      area.querySelectorAll('button').forEach(x=>x.disabled=true);
+      if(i===q.c){alert('⚔ 정답!');triggerAnim(true,()=>{monsterHp--;updateBattleUI();nextDungeonStep();});}
+      else       {alert('💥 오답!');triggerAnim(false,()=>{playerHp--;updateBattleUI();nextDungeonStep();});}
+    };
+    area.appendChild(b);
+  });
+}
+
+async function nextDungeonStep(){
+  if(playerHp<=0){alert('☠ 쓰러졌습니다...');changeMap('town-screen',490);}
+  else if(monsterHp<=0){await winDungeon();}
+  else{
+    quizIndex++;
+    if(quizIndex<quizData.length) renderDungeonQ();
+    else if(monsterHp<playerHp) await winDungeon();
+    else{alert('⚔ 무승부!');changeMap('town-screen',490);}
+  }
+}
+
+function updateBattleUI(){
+  const ph='❤ '.repeat(Math.max(0,playerHp))+'🖤'.repeat(Math.max(0,3-playerHp));
+  const mh='❤ '.repeat(Math.max(0,monsterHp))+'🖤'.repeat(Math.max(0,3-monsterHp));
+  const pe=document.getElementById('battle-player-hp'), me=document.getElementById('battle-monster-hp');
+  if(pe)pe.innerText=ph; if(me)me.innerText=mh;
+}
+
+async function winDungeon(){
+  const xpAmt=isDungeonReplay?XP.replay(currentLevel):XP.dungeon(currentLevel);
+  const pts=isDungeonReplay?Math.floor(currentLevel*5):currentLevel*10;
+  await giveXP(xpAmt); await addPoints(pts);
+  const prog=currentUserData?.progress||{};
+  if(currentLevel>=(prog.dungeon||1)&&currentLevel<20){
+    prog.dungeon=currentLevel+1;
+    await mergeUser(currentUser,{progress:prog});
+    currentUserData.progress=prog;
+  }
+  alert(`🎉 승리! +${xpAmt} XP  +${pts} 포인트`);
+  openDungeonSelect();
+}
+
+function triggerAnim(correct,cb){
+  const pi=document.getElementById('battle-player-vis'), mi=document.getElementById('battle-monster-vis');
+  if(!pi||!mi){if(cb)cb();return;}
+  if(correct){pi.classList.add('animate-p-attack');setTimeout(()=>mi.classList.add('animate-hit'),200);}
+  else       {mi.classList.add('animate-m-attack');setTimeout(()=>pi.classList.add('animate-hit'),200);}
+  setTimeout(()=>{pi.classList.remove('animate-p-attack','animate-hit');mi.classList.remove('animate-m-attack','animate-hit');if(cb)cb();},620);
+}
+function fleeFromDungeon(){if(confirm('전투를 포기하고 마을로 도망치겠습니까?')){alert('🏃 무사히 도망쳤습니다!');changeMap('town-screen',490);}}
+
+// ══════════════════════════════════════════════════════════
+// 마이룸
+// ══════════════════════════════════════════════════════════
+async function openMyRoom(){
+  showLoading('마이룸 불러오는 중...');
+  currentUserData=await getUser(currentUser); hideLoading();
+  changeMap('myroom-screen',645); renderMyRoom();
+}
+
+function renderMyRoom(){
+  const grid=document.getElementById('myroom-grid'); grid.innerHTML='';
+  const room=currentUserData?.roomLayout||[];
+  const inv =currentUserData?.inventory||[];
+  const placed=room.map(r=>r.id);
+  room.forEach(item=>{
+    const s=document.createElement('div'); s.className='room-slot occupied';
+    s.innerHTML=`${item.emoji}<div class="slot-label">${item.name}</div><span class="remove-btn" onclick="doRemove('${item.id}')">✕</span>`;
+    grid.appendChild(s);
+  });
+  const unplaced=inv.filter(i=>i.type==='room'&&!placed.includes(i.id));
+  for(let i=0;i<(15-room.length);i++){
+    const s=document.createElement('div'); s.className='room-slot';
+    if(i<unplaced.length){
+      const item=unplaced[i];
+      s.innerHTML=`<span style="font-size:26px;">➕</span><div class="slot-label">${item.name}</div>`;
+      s.onclick=()=>doPlace(item.id,item.emoji,item.name);
+    } else {
+      s.innerHTML=`<span style="font-size:22px;opacity:.3;">🔲</span><div class="slot-label">빈 공간</div>`;
+    }
+    grid.appendChild(s);
+  }
+}
+
+async function doPlace(id,emoji,name){
+  showLoading('배치 중...');
+  await uRef(currentUser).update({roomLayout:firebase.firestore.FieldValue.arrayUnion({id,emoji,name})});
+  currentUserData=await getUser(currentUser); hideLoading(); renderMyRoom();
+}
+async function doRemove(id){
+  showLoading('제거 중...');
+  const room=currentUserData?.roomLayout||[], target=room.find(r=>r.id===id);
+  if(target) await uRef(currentUser).update({roomLayout:firebase.firestore.FieldValue.arrayRemove(target)});
+  currentUserData=await getUser(currentUser); hideLoading(); renderMyRoom();
+}
+
+async function openRoomShop(){
+  showLoading('상점 불러오는 중...');
+  currentUserData=await getUser(currentUser); hideLoading();
+  changeMap('room-shop-screen',645); renderRoomShop();
+}
+
+function renderRoomShop(){
+  document.getElementById('shop-my-points').innerText=`(보유: ${currentUserData?.points||0} P)`;
+  const grid=document.getElementById('room-shop-grid'); grid.innerHTML='';
+  const inv=currentUserData?.inventory||[];
+  ROOM_ITEMS.forEach(item=>{
+    const owned=inv.some(i=>i.id===item.id);
+    const card=document.createElement('div'); card.className='room-shop-card';
+    card.innerHTML=`
+      <span class="item-emoji">${item.emoji}</span>
+      <div class="item-name">${item.name}</div>
+      <div class="item-price">💰 ${item.price} P</div>
+      ${owned?'<div style="font-size:11px;color:#27ae60;margin-top:2px;">✅ 보유 중</div>':''}
+      <button ${owned?'disabled':''} onclick="doBuyRoom('${item.id}')">${owned?'보유 중':'구매하기'}</button>`;
+    grid.appendChild(card);
+  });
+}
+
+async function doBuyRoom(itemId){
+  const item=ROOM_ITEMS.find(i=>i.id===itemId); if(!item) return;
+  const pts=currentUserData?.points||0;
+  if(pts<item.price){alert(`포인트 부족! (필요: ${item.price}P, 보유: ${pts}P)`);return;}
+  showLoading('구매 중...');
+  const ok=await spendPoints(item.price); if(!ok){hideLoading();return;}
+  await uRef(currentUser).update({inventory:firebase.firestore.FieldValue.arrayUnion({...item,type:'room',grantedAt:Date.now()})});
+  currentUserData=await getUser(currentUser); hideLoading();
+  alert(`✅ [${item.name}] 구매 완료!`); renderRoomShop();
+}
+
+// ══════════════════════════════════════════════════════════
+// 그룹 & 랭킹
+// ══════════════════════════════════════════════════════════
+function getWeekStart(){
+  const now=new Date(),day=now.getDay(),diff=now.getDate()-day+(day===0?-6:1);
+  const mon=new Date(now.setDate(diff)); mon.setHours(0,0,0,0); return mon.getTime();
+}
+
+async function openGroupScreen(){
+  if(_rankUnsub){_rankUnsub();_rankUnsub=null;}
+  changeMap('group-screen',835);
+  showLoading('그룹 정보 불러오는 중...');
+  currentUserData=await getUser(currentUser); hideLoading();
+  refreshGroupUI();
+}
+
+function refreshGroupUI(){
+  const code=currentUserData?.groupCode;
+  document.getElementById('group-no-group').style.display =code?'none':'block';
+  document.getElementById('group-has-group').style.display=code?'block':'none';
+  if(code){
+    document.getElementById('group-code-display').innerText=code;
+    document.getElementById('group-badge').style.display='block';
+    document.getElementById('group-badge-code').innerText=code;
+    startRankingListener(code);
+  }
+}
+
+function startRankingListener(code){
+  if(_rankUnsub){_rankUnsub();_rankUnsub=null;}
+  _rankUnsub=gRef(code).onSnapshot(async snap=>{
+    if(!snap.exists) return;
+    const grp=snap.data();
+    document.getElementById('group-name-display').innerText=grp.name||code;
+    const members=grp.members||[];
+    const users=await Promise.all(members.map(uid=>getUser(uid)));
+    const ranking=users.map((u,i)=>({
+      uid:members[i],name:u?.name||members[i],
+      xp:u?.totalXp||0,level:u?.level||1,
+      rewardItems:u?.weeklyRewardItems||[],
+    })).sort((a,b)=>b.level-a.level||b.xp-a.xp);
+    renderRanking(ranking);
+  });
+}
+
+function renderRanking(ranking){
+  const tbody=document.getElementById('ranking-tbody'); tbody.innerHTML='';
+  const medals=['🥇','🥈','🥉'];
+  ranking.forEach((e,i)=>{
+    const isMe=e.uid===currentUser;
+    const rewards=e.rewardItems.map(r=>r.emoji||'').join(' ')||'—';
+    const tr=document.createElement('tr');
+    if(isMe) tr.style.background='rgba(52,152,219,.2)';
+    tr.innerHTML=`<td style="font-size:22px;">${medals[i]||i+1}</td><td>${e.name}${isMe?' 👈':''}</td><td><strong>Lv.${e.level}</strong></td><td>${e.xp.toLocaleString()} XP</td><td>${rewards}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function toggleCreateGroup(){
+  const a=document.getElementById('group-create-area');
+  a.style.display=a.style.display==='none'?'flex':'none';
+}
+
+async function doCreateGroup(){
+  const name=document.getElementById('group-name-input').value.trim()||`${currentUserData?.name||currentUser}의 그룹`;
+  showLoading('그룹 생성 중...');
+  try{
+    let code;
+    while(true){
+      code=''; const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      for(let i=0;i<6;i++) code+=c[Math.floor(Math.random()*c.length)];
+      const snap=await gRef(code).get(); if(!snap.exists) break;
+    }
+    const batch=db.batch();
+    batch.set(gRef(code),{code,name,owner:currentUser,members:[currentUser],createdAt:firebase.firestore.FieldValue.serverTimestamp(),weeklyReset:getWeekStart()});
+    batch.set(uRef(currentUser),{groupCode:code},{merge:true});
+    await batch.commit();
+    currentUserData=await getUser(currentUser);
+    alert(`✅ 그룹 생성!\n코드: ${code}\n친구에게 알려주세요!`);
+    refreshGroupUI();
+  } finally { hideLoading(); }
+}
+
+async function doJoinGroup(){
+  const code=document.getElementById('group-code-input').value.toUpperCase().trim();
+  if(!code||code.length!==6){alert('6자리 코드를 입력하세요.');return;}
+  showLoading('그룹 참여 중...');
+  try{
+    const snap=await gRef(code).get();
+    if(!snap.exists){alert('존재하지 않는 그룹 코드입니다.');return;}
+    const batch=db.batch();
+    batch.update(gRef(code),{members:firebase.firestore.FieldValue.arrayUnion(currentUser)});
+    batch.set(uRef(currentUser),{groupCode:code},{merge:true});
+    await batch.commit();
+    currentUserData=await getUser(currentUser);
+    alert(`✅ [${snap.data().name}] 그룹에 참여했습니다!`);
+    refreshGroupUI();
+  } finally { hideLoading(); }
+}
+
+async function doLeaveGroup(){
+  if(!confirm('정말 그룹을 탈퇴하시겠습니까?')) return;
+  const code=currentUserData?.groupCode; if(!code) return;
+  showLoading('탈퇴 처리 중...');
+  try{
+    if(_rankUnsub){_rankUnsub();_rankUnsub=null;}
+    const batch=db.batch();
+    batch.update(gRef(code),{members:firebase.firestore.FieldValue.arrayRemove(currentUser)});
+    batch.set(uRef(currentUser),{groupCode:null},{merge:true});
+    await batch.commit();
+    currentUserData=await getUser(currentUser);
+    document.getElementById('group-badge').style.display='none';
+    refreshGroupUI();
+  } finally { hideLoading(); }
+}
+
+function copyGroupCode(){
+  const code=document.getElementById('group-code-display').innerText;
+  navigator.clipboard.writeText(code).then(()=>alert(`코드 [${code}] 복사됨!`));
+}
+
+async function checkWeeklyRewards(code){
+  try{
+    const snap=await gRef(code).get(); if(!snap.exists) return;
+    const grp=snap.data();
+    if((grp.weeklyReset||0)>=getWeekStart()) return;
+    const members=grp.members||[];
+    const users=await Promise.all(members.map(uid=>getUser(uid)));
+    const ranking=users.map((u,i)=>({uid:members[i],xp:u?.totalXp||0,level:u?.level||1}))
+                       .sort((a,b)=>b.level-a.level||b.xp-a.xp);
+    const batch=db.batch();
+    RANK_REWARDS.forEach((r,i)=>{
+      if(ranking[i]){
+        batch.set(uRef(ranking[i].uid),{
+          weeklyRewardItems:firebase.firestore.FieldValue.arrayUnion(r),
+          inventory:firebase.firestore.FieldValue.arrayUnion({...r,type:'room',grantedAt:Date.now()})
+        },{merge:true});
+      }
+    });
+    batch.update(gRef(code),{weeklyReset:getWeekStart()});
+    await batch.commit();
+  } catch(e){ console.warn('Weekly reward error',e); }
+}
+</script>
+</body>
+</html>
